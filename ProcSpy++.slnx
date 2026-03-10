@@ -1,0 +1,8 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="ProcSpy++/ProcSpy++.vcxproj" Id="e585f0b4-16db-4d4d-bc94-d7d9b3e9802e" />
+  <Project Path="SpyDll/SpyDll.vcxproj" Id="8f213595-7d97-4ab1-a428-3b457708d218" />
+</Solution>
