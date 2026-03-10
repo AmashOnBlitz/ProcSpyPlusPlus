@@ -137,6 +137,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\PipeServer.cpp" />
     <ClCompile Include="src\Injector.cpp" />
     <ClCompile Include="src\Render.cpp" />
     <ClCompile Include="src\ImGuiManager.cpp" />
@@ -183,6 +184,7 @@
     <ClInclude Include="include\ImGuiManager.h" />
     <ClInclude Include="include\Injector.h" />
     <ClInclude Include="include\pch.h" />
+    <ClInclude Include="include\PipeServer.h" />
     <ClInclude Include="include\Render.h" />
     <ClInclude Include="include\WindowManager.h" />
     <ClInclude Include="Libraries\include\glad\glad.h" />

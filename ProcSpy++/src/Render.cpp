@@ -6,6 +6,12 @@
 #include <windows.h>
 #include <tlhelp32.h>
 #include <Injector.h>
+#include <unordered_map>
+#include <PipeServer.h>
+#include <future>
+#include <mutex>
+
+enum class EjectState { Idle, Pending, Done };
 
 struct ProcessEntry {
     DWORD       pid;
@@ -22,6 +28,7 @@ struct FailedEntry {
     std::string name;
 };
 
+static std::unordered_map<DWORD, std::vector<std::string>> g_activityLog;
 static std::vector<ProcessEntry>  g_processList;
 static std::vector<uint8_t>       g_processSelected;
 static std::vector<InjectedEntry> g_injectedList;
@@ -29,18 +36,24 @@ static std::vector<InjectedEntry> g_injectedList;
 static std::vector<FailedEntry>   g_injectFailed;
 static std::vector<FailedEntry>   g_ejectFailed;
 
-static char g_processFilter[128]  = "";
-static bool g_showInjectModal     = false;
-static bool g_showEjectModal      = false;
-static int  g_ejectSelectedIdx    = -1;
+static char g_processFilter[128] = "";
+static bool g_showInjectModal = false;
+static bool g_showEjectModal = false;
+static int  g_ejectSelectedIdx = -1;
 static int  g_injectedSelectedIdx = -1;
 
-static bool InjectProcess(DWORD pid, const std::string& name) {
-    return Injector::Inject(pid,name);
-}
+static std::mutex                 g_ejectResultMutex;
+static std::vector<InjectedEntry> g_ejectAllRemaining;
+static std::vector<DWORD>         g_ejectAllSucceeded;
 
-static bool EjectProcess(DWORD pid, const std::string& name) {
-    return Injector::Eject(pid,name);
+static EjectState        g_ejectAllState = EjectState::Idle;
+static std::future<void> g_ejectAllFuture;
+
+static EjectState        g_ejectOneState = EjectState::Idle;
+static std::future<void> g_ejectOneFuture;
+
+static bool InjectProcess(DWORD pid, const std::string& name) {
+    return Injector::Inject(pid, name);
 }
 
 static void RefreshProcessList() {
@@ -89,27 +102,96 @@ static void DoInjectSelected() {
     }
 }
 
+static bool GhostBtn(const char* label, float w = 0.0f) {
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.14f, 0.16f, 0.20f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.18f, 0.85f, 0.65f, 0.25f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.18f, 0.85f, 0.65f, 0.45f));
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.18f, 0.85f, 0.65f, 1.0f));
+    bool r = ImGui::Button(label, ImVec2(w, 0));
+    ImGui::PopStyleColor(4);
+    return r;
+}
+
+static void PollEjectAllResult() {
+    if (g_ejectAllState != EjectState::Done) return;
+
+    std::lock_guard<std::mutex> lk(g_ejectResultMutex);
+
+    for (DWORD pid : g_ejectAllSucceeded) {
+        g_activityLog.erase(pid);
+        auto it = std::find_if(g_injectedList.begin(), g_injectedList.end(),
+                               [pid](const InjectedEntry& e) { return e.pid == pid; });
+        if (it != g_injectedList.end()) g_injectedList.erase(it);
+    }
+    g_injectedSelectedIdx = -1;
+    g_ejectSelectedIdx = -1;
+
+    g_ejectFailed.clear();
+    for (auto& e : g_ejectAllRemaining)
+        g_ejectFailed.push_back({ e.pid, e.name });
+
+    g_ejectAllSucceeded.clear();
+    g_ejectAllRemaining.clear();
+    g_ejectAllState = EjectState::Idle;
+
+    if (g_ejectFailed.empty())
+        g_showEjectModal = false;
+}
+
+static void PollEjectOneResult() {
+    if (g_ejectOneState != EjectState::Done) return;
+
+    std::lock_guard<std::mutex> lk(g_ejectResultMutex);
+
+    for (DWORD pid : g_ejectAllSucceeded) {
+        g_activityLog.erase(pid);
+        auto it = std::find_if(g_injectedList.begin(), g_injectedList.end(),
+                               [pid](const InjectedEntry& e) { return e.pid == pid; });
+        if (it != g_injectedList.end()) {
+            int idx = (int)(it - g_injectedList.begin());
+            if (g_injectedSelectedIdx == idx)     g_injectedSelectedIdx = -1;
+            else if (g_injectedSelectedIdx > idx) g_injectedSelectedIdx--;
+            g_injectedList.erase(it);
+        }
+    }
+    g_ejectSelectedIdx = -1;
+
+    g_ejectFailed.clear();
+    for (auto& e : g_ejectAllRemaining)
+        g_ejectFailed.push_back({ e.pid, e.name });
+
+    g_ejectAllSucceeded.clear();
+    g_ejectAllRemaining.clear();
+    g_ejectOneState = EjectState::Idle;
+
+    if (g_ejectFailed.empty() && g_injectedList.empty())
+        g_showEjectModal = false;
+}
+
 static void RenderInjectModal() {
     if (!g_showInjectModal) return;
 
-    float modalH = g_injectFailed.empty() ? 420.0f : 490.0f;
-    ImGui::SetNextWindowSize(ImVec2(500, modalH), ImGuiCond_Always);
-    ImGui::SetNextWindowPos(
-        ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f),
-        ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+    ImVec2 display = ImGui::GetIO().DisplaySize;
+    float modalW = std::min(500.0f, display.x - 40.0f);
+    float baseH = g_injectFailed.empty() ? 420.0f : 490.0f;
+    float modalH = std::min(baseH, display.y - 40.0f);
 
-    ImGui::PushStyleColor(ImGuiCol_PopupBg,       ImVec4(0.08f, 0.09f, 0.11f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_Border,         ImVec4(0.18f, 0.85f, 0.65f, 0.6f));
-    ImGui::PushStyleColor(ImGuiCol_FrameBg,        ImVec4(0.12f, 0.13f, 0.16f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_ScrollbarBg,    ImVec4(0.08f, 0.09f, 0.11f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_ScrollbarGrab,  ImVec4(0.18f, 0.85f, 0.65f, 0.5f));
+    ImGui::SetNextWindowSize(ImVec2(modalW, modalH), ImGuiCond_Always);
+    ImGui::SetNextWindowPos(ImVec2(display.x * 0.5f, display.y * 0.5f),
+                            ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+
+    ImGui::PushStyleColor(ImGuiCol_PopupBg, ImVec4(0.08f, 0.09f, 0.11f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.18f, 0.85f, 0.65f, 0.6f));
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.12f, 0.13f, 0.16f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ScrollbarBg, ImVec4(0.08f, 0.09f, 0.11f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ScrollbarGrab, ImVec4(0.18f, 0.85f, 0.65f, 0.5f));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.5f);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,   6.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,      ImVec2(8, 5));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 6.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8, 5));
 
     ImGui::OpenPopup("##InjectPicker");
     if (ImGui::BeginPopupModal("##InjectPicker", nullptr,
-        ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove)) {
+                               ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove)) {
 
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.18f, 0.85f, 0.65f, 1.0f));
         ImGui::Dummy(ImVec2(0, 4));
@@ -117,11 +199,12 @@ static void RenderInjectModal() {
         ImGui::Text("SELECT TARGET PROCESSES");
         ImGui::PopStyleColor();
 
-        ImGui::SameLine(ImGui::GetContentRegionAvail().x - 26);
-        ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.0f,  0.0f,  0.0f,  0.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.85f, 0.2f,  0.2f,  0.3f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.85f, 0.2f,  0.2f,  0.6f));
-        ImGui::PushStyleColor(ImGuiCol_Text,          ImVec4(0.7f,  0.7f,  0.7f,  1.0f));
+        float closeBtnX = ImGui::GetWindowWidth() - 30.0f;
+        ImGui::SameLine(closeBtnX);
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.85f, 0.2f, 0.2f, 0.3f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.85f, 0.2f, 0.2f, 0.6f));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.7f, 0.7f, 0.7f, 1.0f));
         if (ImGui::Button("x##iclose", ImVec2(22, 22))) {
             g_injectFailed.clear();
             g_showInjectModal = false;
@@ -132,25 +215,25 @@ static void RenderInjectModal() {
         ImGui::Separator();
         ImGui::Dummy(ImVec2(0, 2));
 
-        auto GhostBtn = [](const char* label, float w) -> bool {
-            ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.14f, 0.16f, 0.20f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.18f, 0.85f, 0.65f, 0.25f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.18f, 0.85f, 0.65f, 0.45f));
-            ImGui::PushStyleColor(ImGuiCol_Text,          ImVec4(0.18f, 0.85f, 0.65f, 1.0f));
-            bool r = ImGui::Button(label, ImVec2(w, 0));
-            ImGui::PopStyleColor(4);
-            return r;
-        };
+        const float fp = ImGui::GetStyle().FramePadding.x;
+        const float sp = ImGui::GetStyle().ItemSpacing.x;
 
+        float wRefresh = ImGui::CalcTextSize("Refresh").x + fp * 2.0f;
+        float wAll = ImGui::CalcTextSize("All").x + fp * 2.0f;
+        float wNone = ImGui::CalcTextSize("None").x + fp * 2.0f;
+        float btnTotal = wRefresh + wAll + wNone + sp * 3.0f;
         float availW = ImGui::GetContentRegionAvail().x;
-        ImGui::SetNextItemWidth(availW - 190);
+        float filterW = std::max(40.0f, availW - btnTotal);
+
+        ImGui::SetNextItemWidth(filterW);
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.85f, 0.88f, 0.90f, 1.0f));
         ImGui::InputTextWithHint("##ifilter", "Filter processes...", g_processFilter, sizeof(g_processFilter));
         ImGui::PopStyleColor();
+
         ImGui::SameLine();
-        if (GhostBtn("Refresh", 68)) RefreshProcessList();
+        if (GhostBtn("Refresh", wRefresh)) RefreshProcessList();
         ImGui::SameLine();
-        if (GhostBtn("All", 36)) {
+        if (GhostBtn("All", wAll)) {
             std::string fl = g_processFilter;
             for (auto& ch : fl) ch = (char)tolower(ch);
             for (int i = 0; i < (int)g_processList.size(); i++) {
@@ -161,22 +244,28 @@ static void RenderInjectModal() {
             }
         }
         ImGui::SameLine();
-        if (GhostBtn("None", 40)) {
+        if (GhostBtn("None", wNone))
             for (auto& b : g_processSelected) b = 0;
-        }
 
         ImGui::Dummy(ImVec2(0, 2));
 
-        float listH = g_injectFailed.empty() ? 278.0f : 204.0f;
+        float lineH = ImGui::GetFrameHeight();
+        float itemSp = ImGui::GetStyle().ItemSpacing.y;
+        float reserveBottom = lineH + itemSp * 2.0f + 12.0f;
+        if (!g_injectFailed.empty())
+            reserveBottom += lineH + 56.0f + itemSp * 4.0f + 8.0f;
+
+        float listH = std::max(60.0f, ImGui::GetContentRegionAvail().y - reserveBottom);
+
         ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.10f, 0.11f, 0.14f, 1.0f));
         ImGui::BeginChild("##iproclist", ImVec2(0, listH), true);
 
-        ImGui::PushStyleColor(ImGuiCol_Text,          ImVec4(0.55f, 0.60f, 0.65f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_Header,        ImVec4(0.18f, 0.85f, 0.65f, 0.20f));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.55f, 0.60f, 0.65f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.18f, 0.85f, 0.65f, 0.20f));
         ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.18f, 0.85f, 0.65f, 0.12f));
-        ImGui::PushStyleColor(ImGuiCol_HeaderActive,  ImVec4(0.18f, 0.85f, 0.65f, 0.30f));
-        ImGui::PushStyleColor(ImGuiCol_CheckMark,     ImVec4(0.18f, 0.85f, 0.65f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_FrameBg,       ImVec4(0.12f, 0.14f, 0.17f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.18f, 0.85f, 0.65f, 0.30f));
+        ImGui::PushStyleColor(ImGuiCol_CheckMark, ImVec4(0.18f, 0.85f, 0.65f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.12f, 0.14f, 0.17f, 1.0f));
 
         std::string filterLow = g_processFilter;
         for (auto& ch : filterLow) ch = (char)tolower(ch);
@@ -233,23 +322,25 @@ static void RenderInjectModal() {
         int selCount = CountSelected();
 
         ImGui::PushStyleColor(ImGuiCol_Text, selCount > 0
-            ? ImVec4(0.18f, 0.85f, 0.65f, 0.9f)
-            : ImVec4(0.35f, 0.38f, 0.42f, 1.0f));
+                              ? ImVec4(0.18f, 0.85f, 0.65f, 0.9f)
+                              : ImVec4(0.35f, 0.38f, 0.42f, 1.0f));
         ImGui::Text("  %d process%s selected", selCount, selCount == 1 ? "" : "es");
         ImGui::PopStyleColor();
 
-        ImGui::SameLine(ImGui::GetContentRegionAvail().x - 96);
+        char confirmLabel[48];
+        snprintf(confirmLabel, sizeof(confirmLabel), "Inject (%d)", selCount);
+        float injectBtnW = ImGui::CalcTextSize(confirmLabel).x + fp * 2.0f + 8.0f;
+        float injectBtnX = ImGui::GetWindowWidth() - injectBtnW - ImGui::GetStyle().WindowPadding.x;
+        ImGui::SameLine(injectBtnX);
 
         bool canConfirm = (selCount > 0);
         if (!canConfirm) ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.35f);
-        ImGui::PushStyleColor(ImGuiCol_Button,        canConfirm ? ImVec4(0.10f, 0.60f, 0.45f, 1.0f) : ImVec4(0.14f, 0.16f, 0.20f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Button, canConfirm ? ImVec4(0.10f, 0.60f, 0.45f, 1.0f) : ImVec4(0.14f, 0.16f, 0.20f, 1.0f));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, canConfirm ? ImVec4(0.14f, 0.75f, 0.56f, 1.0f) : ImVec4(0.14f, 0.16f, 0.20f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  canConfirm ? ImVec4(0.08f, 0.50f, 0.38f, 1.0f) : ImVec4(0.14f, 0.16f, 0.20f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_Text,          ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, canConfirm ? ImVec4(0.08f, 0.50f, 0.38f, 1.0f) : ImVec4(0.14f, 0.16f, 0.20f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
 
-        char confirmLabel[48];
-        snprintf(confirmLabel, sizeof(confirmLabel), "Inject (%d)", selCount);
-        if (ImGui::Button(confirmLabel, ImVec2(96, 0)) && canConfirm) {
+        if (ImGui::Button(confirmLabel, ImVec2(injectBtnW, 0)) && canConfirm) {
             DoInjectSelected();
             if (g_injectFailed.empty()) {
                 g_showInjectModal = false;
@@ -269,24 +360,32 @@ static void RenderInjectModal() {
 static void RenderEjectModal() {
     if (!g_showEjectModal) return;
 
-    float modalH = g_ejectFailed.empty() ? 340.0f : 420.0f;
-    ImGui::SetNextWindowSize(ImVec2(420, modalH), ImGuiCond_Always);
-    ImGui::SetNextWindowPos(
-        ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f),
-        ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+    PollEjectAllResult();
+    PollEjectOneResult();
 
-    ImGui::PushStyleColor(ImGuiCol_PopupBg,       ImVec4(0.08f, 0.09f, 0.11f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_Border,         ImVec4(0.70f, 0.20f, 0.20f, 0.7f));
-    ImGui::PushStyleColor(ImGuiCol_FrameBg,        ImVec4(0.12f, 0.13f, 0.16f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_ScrollbarBg,    ImVec4(0.08f, 0.09f, 0.11f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_ScrollbarGrab,  ImVec4(0.70f, 0.20f, 0.20f, 0.5f));
+    if (!g_showEjectModal) return;
+
+    ImVec2 display = ImGui::GetIO().DisplaySize;
+    float modalW = std::min(420.0f, display.x - 40.0f);
+    float baseH = g_ejectFailed.empty() ? 340.0f : 420.0f;
+    float modalH = std::min(baseH, display.y - 40.0f);
+
+    ImGui::SetNextWindowSize(ImVec2(modalW, modalH), ImGuiCond_Always);
+    ImGui::SetNextWindowPos(ImVec2(display.x * 0.5f, display.y * 0.5f),
+                            ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+
+    ImGui::PushStyleColor(ImGuiCol_PopupBg, ImVec4(0.08f, 0.09f, 0.11f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.70f, 0.20f, 0.20f, 0.7f));
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.12f, 0.13f, 0.16f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ScrollbarBg, ImVec4(0.08f, 0.09f, 0.11f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ScrollbarGrab, ImVec4(0.70f, 0.20f, 0.20f, 0.5f));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.5f);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,   6.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,      ImVec2(8, 5));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 6.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8, 5));
 
     ImGui::OpenPopup("##EjectPicker");
     if (ImGui::BeginPopupModal("##EjectPicker", nullptr,
-        ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove)) {
+                               ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove)) {
 
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.90f, 0.30f, 0.30f, 1.0f));
         ImGui::Dummy(ImVec2(0, 4));
@@ -294,14 +393,15 @@ static void RenderEjectModal() {
         ImGui::Text("EJECT");
         ImGui::PopStyleColor();
 
-        ImGui::SameLine(ImGui::GetContentRegionAvail().x - 26);
-        ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.0f,  0.0f,  0.0f,  0.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.85f, 0.2f,  0.2f,  0.3f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.85f, 0.2f,  0.2f,  0.6f));
-        ImGui::PushStyleColor(ImGuiCol_Text,          ImVec4(0.7f,  0.7f,  0.7f,  1.0f));
+        float closeBtnX = ImGui::GetWindowWidth() - 30.0f;
+        ImGui::SameLine(closeBtnX);
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.85f, 0.2f, 0.2f, 0.3f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.85f, 0.2f, 0.2f, 0.6f));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.7f, 0.7f, 0.7f, 1.0f));
         if (ImGui::Button("x##eclose", ImVec2(22, 22))) {
             g_ejectFailed.clear();
-            g_showEjectModal   = false;
+            g_showEjectModal = false;
             g_ejectSelectedIdx = -1;
             ImGui::CloseCurrentPopup();
         }
@@ -316,14 +416,23 @@ static void RenderEjectModal() {
 
         ImGui::Dummy(ImVec2(0, 6));
 
-        float listH = g_ejectFailed.empty() ? 196.0f : 126.0f;
+        const float fp = ImGui::GetStyle().FramePadding.x;
+        const float lineH = ImGui::GetFrameHeight();
+        const float itemSp = ImGui::GetStyle().ItemSpacing.y;
+
+        float reserveBottom = lineH + itemSp * 2.0f + 14.0f;
+        if (!g_ejectFailed.empty())
+            reserveBottom += lineH + 56.0f + itemSp * 4.0f + 8.0f;
+
+        float listH = std::max(60.0f, ImGui::GetContentRegionAvail().y - reserveBottom);
+
         ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.10f, 0.11f, 0.14f, 1.0f));
         ImGui::BeginChild("##ejectlist", ImVec2(0, listH), true);
 
-        ImGui::PushStyleColor(ImGuiCol_Text,          ImVec4(0.55f, 0.60f, 0.65f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_Header,        ImVec4(0.70f, 0.15f, 0.15f, 0.25f));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.55f, 0.60f, 0.65f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.70f, 0.15f, 0.15f, 0.25f));
         ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.70f, 0.15f, 0.15f, 0.15f));
-        ImGui::PushStyleColor(ImGuiCol_HeaderActive,  ImVec4(0.70f, 0.15f, 0.15f, 0.35f));
+        ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.70f, 0.15f, 0.15f, 0.35f));
 
         if (g_injectedList.empty()) {
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.35f, 0.38f, 0.42f, 1.0f));
@@ -370,70 +479,83 @@ static void RenderEjectModal() {
 
         ImGui::Dummy(ImVec2(0, 6));
 
+        bool anyBusy = (g_ejectAllState == EjectState::Pending || g_ejectOneState == EjectState::Pending);
         bool hasInjected = !g_injectedList.empty();
         bool hasSelected = (g_ejectSelectedIdx >= 0 && g_ejectSelectedIdx < (int)g_injectedList.size());
 
         auto RedBtn = [](const char* lbl, float w, bool solid) -> bool {
             if (solid) {
-                ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.55f, 0.12f, 0.12f, 0.90f));
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.12f, 0.12f, 0.90f));
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.75f, 0.15f, 0.15f, 1.0f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.45f, 0.10f, 0.10f, 1.0f));
-                ImGui::PushStyleColor(ImGuiCol_Text,          ImVec4(1.0f,  1.0f,  1.0f,  1.0f));
-            } else {
-                ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.14f, 0.16f, 0.20f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.45f, 0.10f, 0.10f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+            }
+            else {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.14f, 0.16f, 0.20f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.55f, 0.12f, 0.12f, 0.35f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.55f, 0.12f, 0.12f, 0.55f));
-                ImGui::PushStyleColor(ImGuiCol_Text,          ImVec4(0.80f, 0.30f, 0.30f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.55f, 0.12f, 0.12f, 0.55f));
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.80f, 0.30f, 0.30f, 1.0f));
             }
             bool r = ImGui::Button(lbl, ImVec2(w, 0));
             ImGui::PopStyleColor(4);
             return r;
         };
 
-        if (!hasSelected) ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.40f);
-        if (RedBtn("Eject Selected", 122, hasSelected) && hasSelected) {
-            auto& target = g_injectedList[g_ejectSelectedIdx];
-            if (EjectProcess(target.pid, target.name)) {
-                if (g_injectedSelectedIdx == g_ejectSelectedIdx) g_injectedSelectedIdx = -1;
-                else if (g_injectedSelectedIdx > g_ejectSelectedIdx) g_injectedSelectedIdx--;
-                g_injectedList.erase(g_injectedList.begin() + g_ejectSelectedIdx);
-                g_ejectSelectedIdx = -1;
-                g_ejectFailed.clear();
-                if (g_injectedList.empty()) {
-                    g_showEjectModal = false;
-                    ImGui::CloseCurrentPopup();
-                }
-            } else {
-                g_ejectFailed.clear();
-                g_ejectFailed.push_back({ target.pid, target.name });
-            }
+        float wEjectSel = ImGui::CalcTextSize("Eject Selected").x + fp * 2.0f + 8.0f;
+        float wEjectAll = ImGui::CalcTextSize("Eject All").x + fp * 2.0f + 8.0f;
+        float wPending = ImGui::CalcTextSize("Ejecting...").x + fp * 2.0f + 8.0f;
+
+        bool canSel = hasSelected && !anyBusy;
+        bool canAll = hasInjected && !anyBusy;
+
+        if (!canSel) ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.40f);
+        const char* selLabel = (g_ejectOneState == EjectState::Pending) ? "Ejecting..." : "Eject Selected";
+        float       selW = (g_ejectOneState == EjectState::Pending) ? wPending : wEjectSel;
+        if (RedBtn(selLabel, selW, canSel) && canSel) {
+            InjectedEntry target = g_injectedList[g_ejectSelectedIdx];
+            g_ejectOneState = EjectState::Pending;
+            g_ejectFailed.clear();
+            g_ejectAllSucceeded.clear();
+            g_ejectAllRemaining.clear();
+
+            g_ejectOneFuture = std::async(std::launch::async, [target]() {
+                bool ok = Injector::Deactivate(target.pid, target.name);
+                std::lock_guard<std::mutex> lk(g_ejectResultMutex);
+                if (ok) g_ejectAllSucceeded.push_back(target.pid);
+                else    g_ejectAllRemaining.push_back(target);
+                g_ejectOneState = EjectState::Done;
+            });
         }
-        if (!hasSelected) ImGui::PopStyleVar();
+        if (!canSel) ImGui::PopStyleVar();
 
         ImGui::SameLine(0, 8);
 
-        if (!hasInjected) ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.40f);
-        if (RedBtn("Eject All", 86, hasInjected) && hasInjected) {
+        if (!canAll) ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.40f);
+        const char* allLabel = (g_ejectAllState == EjectState::Pending) ? "Ejecting..." : "Eject All";
+        float       allW = (g_ejectAllState == EjectState::Pending) ? wPending : wEjectAll;
+        if (RedBtn(allLabel, allW, canAll) && canAll) {
+            std::vector<InjectedEntry> toEject = g_injectedList;
+            g_ejectAllState = EjectState::Pending;
             g_ejectFailed.clear();
-            std::vector<InjectedEntry> remaining;
-            for (auto& inj : g_injectedList) {
-                if (EjectProcess(inj.pid, inj.name)) {
-                    if (g_injectedSelectedIdx >= 0 &&
-                        g_injectedList[g_injectedSelectedIdx].pid == inj.pid)
-                        g_injectedSelectedIdx = -1;
-                } else {
-                    g_ejectFailed.push_back({ inj.pid, inj.name });
-                    remaining.push_back(inj);
+            g_ejectAllSucceeded.clear();
+            g_ejectAllRemaining.clear();
+
+            g_ejectAllFuture = std::async(std::launch::async, [toEject]() mutable {
+                std::vector<InjectedEntry> remaining;
+                std::vector<DWORD>         succeeded;
+                for (auto& inj : toEject) {
+                    if (Injector::Deactivate(inj.pid, inj.name))
+                        succeeded.push_back(inj.pid);
+                    else
+                        remaining.push_back(inj);
                 }
-            }
-            g_injectedList = remaining;
-            g_ejectSelectedIdx = -1;
-            if (g_ejectFailed.empty()) {
-                g_showEjectModal = false;
-                ImGui::CloseCurrentPopup();
-            }
+                std::lock_guard<std::mutex> lk(g_ejectResultMutex);
+                g_ejectAllSucceeded = std::move(succeeded);
+                g_ejectAllRemaining = std::move(remaining);
+                g_ejectAllState = EjectState::Done;
+            });
         }
-        if (!hasInjected) ImGui::PopStyleVar();
+        if (!canAll) ImGui::PopStyleVar();
 
         ImGui::EndPopup();
     }
@@ -443,46 +565,37 @@ static void RenderEjectModal() {
 }
 
 static void RenderMenuBar() {
-    ImVec2 size = ImGui::GetWindowSize();
-
-    ImGui::PushStyleColor(ImGuiCol_MenuBarBg,     ImVec4(0.06f, 0.07f, 0.09f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.10f, 0.60f, 0.45f, 0.85f));
+    ImGui::PushStyleColor(ImGuiCol_MenuBarBg, ImVec4(0.06f, 0.07f, 0.09f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.10f, 0.60f, 0.45f, 0.85f));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.14f, 0.75f, 0.56f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.08f, 0.50f, 0.38f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_Text,          ImVec4(0.95f, 1.0f,  0.98f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.08f, 0.50f, 0.38f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 1.0f, 0.98f, 1.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,   ImVec2(6, 8));
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,  ImVec2(8, 6));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6, 8));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(12, 6));
 
     if (ImGui::BeginMenuBar()) {
-        float btnW = (size.x - 48.0f) / 4.5f;
+        bool hasInjected = !g_injectedList.empty();
 
-        if (ImGui::Button("  Inject All  ", ImVec2(btnW, 0))) {
-            if (g_processList.empty()) RefreshProcessList();
-            for (auto& b : g_processSelected) b = 1;
-            DoInjectSelected();
-        }
-        ImGui::SameLine();
-
-        ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.08f, 0.40f, 0.65f, 0.85f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.10f, 0.52f, 0.80f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.06f, 0.33f, 0.55f, 1.0f));
-        if (ImGui::Button("  Selective Inject  ", ImVec2(btnW * 1.55f, 0))) {
-            if (g_processList.empty()) RefreshProcessList();
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.10f, 0.60f, 0.45f, 0.85f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.14f, 0.75f, 0.56f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.08f, 0.50f, 0.38f, 1.0f));
+        if (ImGui::Button("Inject")) {
+            RefreshProcessList();
             g_injectFailed.clear();
             g_showInjectModal = true;
         }
         ImGui::PopStyleColor(3);
+
         ImGui::SameLine();
 
-        bool hasInjected = !g_injectedList.empty();
-        ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.55f, 0.12f, 0.12f, 0.85f));
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.12f, 0.12f, 0.85f));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.75f, 0.15f, 0.15f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.45f, 0.10f, 0.10f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.45f, 0.10f, 0.10f, 1.0f));
         if (!hasInjected) ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.45f);
-        if (ImGui::Button("  Eject  ", ImVec2(btnW, 0)) && hasInjected) {
+        if (ImGui::Button("Eject") && hasInjected) {
             g_ejectFailed.clear();
-            g_showEjectModal   = true;
+            g_showEjectModal = true;
             g_ejectSelectedIdx = -1;
         }
         if (!hasInjected) ImGui::PopStyleVar();
@@ -503,29 +616,40 @@ static void RenderMenuBar() {
 }
 
 void Render(ImGuiWindowFlags flags) {
-    ImGui::PushStyleColor(ImGuiCol_WindowBg,             ImVec4(0.08f, 0.09f, 0.11f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_ChildBg,              ImVec4(0.10f, 0.11f, 0.14f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_Border,               ImVec4(0.18f, 0.22f, 0.28f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_ScrollbarBg,          ImVec4(0.08f, 0.09f, 0.11f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_ScrollbarGrab,        ImVec4(0.18f, 0.85f, 0.65f, 0.4f));
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.08f, 0.09f, 0.11f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.10f, 0.11f, 0.14f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.18f, 0.22f, 0.28f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ScrollbarBg, ImVec4(0.08f, 0.09f, 0.11f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ScrollbarGrab, ImVec4(0.18f, 0.85f, 0.65f, 0.4f));
     ImGui::PushStyleColor(ImGuiCol_ScrollbarGrabHovered, ImVec4(0.18f, 0.85f, 0.65f, 0.65f));
-    ImGui::PushStyleColor(ImGuiCol_Header,               ImVec4(0.18f, 0.85f, 0.65f, 0.18f));
-    ImGui::PushStyleColor(ImGuiCol_HeaderHovered,        ImVec4(0.18f, 0.85f, 0.65f, 0.10f));
-    ImGui::PushStyleColor(ImGuiCol_HeaderActive,         ImVec4(0.18f, 0.85f, 0.65f, 0.28f));
-    ImGui::PushStyleColor(ImGuiCol_Separator,            ImVec4(0.18f, 0.22f, 0.28f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_Text,                 ImVec4(0.82f, 0.86f, 0.90f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.18f, 0.85f, 0.65f, 0.18f));
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.18f, 0.85f, 0.65f, 0.10f));
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.18f, 0.85f, 0.65f, 0.28f));
+    ImGui::PushStyleColor(ImGuiCol_Separator, ImVec4(0.18f, 0.22f, 0.28f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.82f, 0.86f, 0.90f, 1.0f));
+
+    for (auto& inj : g_injectedList) {
+        auto newMsgs = PipeServer::DrainMessages(inj.pid);
+        if (!newMsgs.empty()) {
+            auto& log = g_activityLog[inj.pid];
+            for (auto& m : newMsgs)
+                log.push_back(m);
+            if (log.size() > 5000)
+                log.erase(log.begin(), log.begin() + (log.size() - 500));
+        }
+    }
 
     ImGui::Begin("FullWindow", nullptr, flags);
     RenderMenuBar();
 
     ImVec2 windowSize = ImGui::GetContentRegionAvail();
     float  statusBarH = ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.y + 2.0f;
-    float  panelH     = windowSize.y - statusBarH - ImGui::GetStyle().ItemSpacing.y;
-    float  listWidth  = windowSize.x * 0.35f;
+    float  panelH = windowSize.y - statusBarH - ImGui::GetStyle().ItemSpacing.y;
+    float  listWidth = windowSize.x * 0.35f;
     float  rightWidth = windowSize.x - listWidth - ImGui::GetStyle().ItemSpacing.x;
 
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,   ImVec2(4, 4));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 4));
 
     ImGui::BeginChild("InjectedList", ImVec2(listWidth, panelH), true,
                       ImGuiWindowFlags_HorizontalScrollbar);
@@ -568,7 +692,8 @@ void Render(ImGuiWindowFlags flags) {
         ImGui::Text("  ACTIVITY  -  %s  (PID %lu)",
                     g_injectedList[g_injectedSelectedIdx].name.c_str(),
                     (unsigned long)g_injectedList[g_injectedSelectedIdx].pid);
-    } else {
+    }
+    else {
         ImGui::Text("  ACTIVITY");
     }
     ImGui::PopStyleColor();
@@ -580,10 +705,33 @@ void Render(ImGuiWindowFlags flags) {
         ImGui::Dummy(ImVec2(0, 4));
         ImGui::Text("  Select an injected process to view its activity");
         ImGui::PopStyleColor();
-    } else {
-        // TODO: render per-process activity for:
-        //   g_injectedList[g_injectedSelectedIdx].pid
-        //   g_injectedList[g_injectedSelectedIdx].name
+    }
+    else {
+        DWORD viewPid = g_injectedList[g_injectedSelectedIdx].pid;
+        auto& log = g_activityLog[viewPid];
+
+        float logH = ImGui::GetContentRegionAvail().y;
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.07f, 0.08f, 0.10f, 1.0f));
+        ImGui::BeginChild("##actlog", ImVec2(0, logH), false);
+
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.75f, 0.82f, 0.88f, 1.0f));
+        for (auto& msg : log) {
+            if (msg.rfind("[system]", 0) == 0) {
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.18f, 0.85f, 0.65f, 0.85f));
+                ImGui::TextUnformatted(msg.c_str());
+                ImGui::PopStyleColor();
+            }
+            else {
+                ImGui::TextUnformatted(msg.c_str());
+            }
+        }
+        ImGui::PopStyleColor();
+
+        if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY() - 4.0f)
+            ImGui::SetScrollHereY(1.0f);
+
+        ImGui::EndChild();
+        ImGui::PopStyleColor();
     }
 
     ImGui::EndChild();
@@ -593,7 +741,9 @@ void Render(ImGuiWindowFlags flags) {
     ImGui::BeginChild("StatusBar", ImVec2(0, statusBarH), false);
     ImGui::Dummy(ImVec2(0, 1));
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.35f, 0.40f, 0.45f, 1.0f));
-    ImGui::Text("  Status: Ready");
+
+    bool anyBusy = (g_ejectAllState == EjectState::Pending || g_ejectOneState == EjectState::Pending);
+    ImGui::Text("  Status: %s", anyBusy ? "Ejecting..." : "Ready");
     ImGui::SameLine(); ImGui::Text("|");
     ImGui::SameLine(); ImGui::Text("Injected: %d", (int)g_injectedList.size());
     if (g_injectedSelectedIdx >= 0 && g_injectedSelectedIdx < (int)g_injectedList.size()) {

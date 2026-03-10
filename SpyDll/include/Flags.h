@@ -1,3 +1,3 @@
 #pragma once
-
-inline bool ThreadExpectedToStop = false;
+#include <atomic>
+inline std::atomic<bool> ThreadExpectedToStop{ false };

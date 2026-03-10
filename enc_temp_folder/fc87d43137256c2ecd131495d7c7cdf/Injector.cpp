@@ -151,10 +151,11 @@ bool Injector::Eject(DWORD pid, const std::string& name)
     //return false;
 }
 
+// Helper: returns true if hModule is still present in the target process
 static bool IsModuleStillLoaded(DWORD pid, HMODULE hModule)
 {
     HANDLE hProc = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid);
-    if (!hProc) return false;
+    if (!hProc) return false;          // process gone → module gone
 
     HMODULE mods[1024];
     DWORD needed = 0;
@@ -177,15 +178,18 @@ bool Injector::Deactivate(DWORD pid, const std::string& name)
                            [&](const InjectedProc& p) { return p.pid == pid && p.name == name; });
     if (it == InjectedProcesses.end()) return false;
 
-    HMODULE savedModule = it->module;
+    HMODULE savedModule = it->module;   // capture before erase
 
     bool cmdOk = PipeServer::SendCommand(pid, "STOP");
     Sleep(300);
     PipeServer::Cleanup(pid);
 
+    // Whether the STOP command got through or not, check if the module
+    // is actually still loaded.  If the pipe was already broken the DLL
+    // is effectively gone → treat as success so the UI removes it.
     bool moduleGone = !IsModuleStillLoaded(pid, savedModule);
 
-    InjectedProcesses.erase(it);
+    InjectedProcesses.erase(it);        // always erase our tracking entry
 
-    return cmdOk || moduleGone;
+    return cmdOk || moduleGone;         // success if we sent STOP *or* DLL already left
 }
