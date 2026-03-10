@@ -1,0 +1,21 @@
+#pragma once
+#include <Windows.h>
+#include <string>
+#include <vector>
+
+struct InjectedProc {
+	DWORD pid;
+	std::string name;
+	void* mem = nullptr;
+	HMODULE module;
+};
+
+class Injector final {
+
+public:
+
+	Injector() = default;
+	static bool Inject(DWORD pid, const std::string& name);
+	static bool Eject(DWORD pid, const std::string& name);
+	static std::vector<InjectedProc> InjectedProcesses;
+};

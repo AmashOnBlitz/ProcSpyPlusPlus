@@ -34,6 +34,19 @@ DWORD WINAPI MainThread(LPVOID) {
     CreateThread(nullptr, 0, MessageThread, nullptr, 0, nullptr);
     std::string msg = "Dll injected in " + GetProcessName() + " at " + GetSysTime();
     messenger::PutMessage(msg);
+    AllocConsole();
+
+    FILE* f;
+    freopen_s(&f, "CONOUT$", "w", stdout);
+    freopen_s(&f, "CONOUT$", "w", stderr);
+
+    std::cout << "SpyDll injected successfully!\n";
+    std::cout << "Process: " << GetProcessName() << "\n";
+    std::cout << "Time: " << GetSysTime() << "\n";
+    while (true) {
+        std::cout << "Still In\n";
+        Sleep(100);
+    }
     return 0;
 }
 

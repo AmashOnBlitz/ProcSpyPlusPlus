@@ -137,6 +137,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\Injector.cpp" />
     <ClCompile Include="src\Render.cpp" />
     <ClCompile Include="src\ImGuiManager.cpp" />
     <ClCompile Include="src\WindowManager.cpp" />
@@ -180,6 +181,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\ImGuiManager.h" />
+    <ClInclude Include="include\Injector.h" />
     <ClInclude Include="include\pch.h" />
     <ClInclude Include="include\Render.h" />
     <ClInclude Include="include\WindowManager.h" />
