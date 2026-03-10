@@ -18,48 +18,84 @@
     <ClCompile Include="src\main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Libraries\include\ImGUI\imgui.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Libraries\include\ImGUI\imgui_demo.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Libraries\include\ImGUI\imgui_draw.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Libraries\include\ImGUI\imgui_impl_glfw.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Libraries\include\ImGUI\imgui_impl_opengl3.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Libraries\include\ImGUI\imgui_tables.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Libraries\include\ImGUI\imgui_widgets.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\pch.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\glad.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\WindowManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ImGuiManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Render.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Libraries\include\core\EventSystem.h">
+    <ClInclude Include="Libraries\include\glad\glad.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Libraries\include\core\Renderer.h">
+    <ClInclude Include="Libraries\include\ImGUI\imconfig.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Libraries\include\core\Types.h">
+    <ClInclude Include="Libraries\include\ImGUI\imgui.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Libraries\include\core\Window.h">
+    <ClInclude Include="Libraries\include\ImGUI\imgui_impl_glfw.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Libraries\include\styles\Styles.h">
+    <ClInclude Include="Libraries\include\ImGUI\imgui_impl_opengl3.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Libraries\include\widgets\Button.h">
+    <ClInclude Include="Libraries\include\ImGUI\imgui_impl_opengl3_loader.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Libraries\include\widgets\LabelCheckboxRadio.h">
+    <ClInclude Include="Libraries\include\ImGUI\imgui_internal.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Libraries\include\widgets\ListBoxSearchBox.h">
+    <ClInclude Include="Libraries\include\ImGUI\imstb_rectpack.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Libraries\include\widgets\NewWidgets.h">
+    <ClInclude Include="Libraries\include\ImGUI\imstb_textedit.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Libraries\include\widgets\SliderProgress.h">
+    <ClInclude Include="Libraries\include\ImGUI\imstb_truetype.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Libraries\include\widgets\TabTooltipScrollbar.h">
+    <ClInclude Include="include\pch.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Libraries\include\widgets\TextBox.h">
+    <ClInclude Include="include\WindowManager.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Libraries\include\widgets\Widget.h">
+    <ClInclude Include="include\ImGuiManager.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Libraries\include\MyWinUI.h">
+    <ClInclude Include="include\Render.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

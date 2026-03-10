@@ -106,12 +106,14 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <AdditionalIncludeDirectories>$(ProjectDir)include;$(ProjectDir)Libraries\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
     </ClCompile>
     <Link>
-      <SubSystem>Console</SubSystem>
+      <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(ProjectDir)Libraries\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>MyWinUI_x64.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>glfw3.lib;opengl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -124,32 +126,73 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <AdditionalIncludeDirectories>$(ProjectDir)include;$(ProjectDir)Libraries\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
     </ClCompile>
     <Link>
-      <SubSystem>Console</SubSystem>
+      <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(ProjectDir)Libraries\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>MyWinUI_x64.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>glfw3.lib;opengl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\Render.cpp" />
+    <ClCompile Include="src\ImGuiManager.cpp" />
+    <ClCompile Include="src\WindowManager.cpp" />
+    <ClCompile Include="Libraries\include\ImGUI\imgui.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="Libraries\include\ImGUI\imgui_demo.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="Libraries\include\ImGUI\imgui_draw.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="Libraries\include\ImGUI\imgui_impl_glfw.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="Libraries\include\ImGUI\imgui_impl_opengl3.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="Libraries\include\ImGUI\imgui_tables.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="Libraries\include\ImGUI\imgui_widgets.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="src\glad.c">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\pch.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Libraries\include\core\EventSystem.h" />
-    <ClInclude Include="Libraries\include\core\Renderer.h" />
-    <ClInclude Include="Libraries\include\core\Types.h" />
-    <ClInclude Include="Libraries\include\core\Window.h" />
-    <ClInclude Include="Libraries\include\MyWinUI.h" />
-    <ClInclude Include="Libraries\include\styles\Styles.h" />
-    <ClInclude Include="Libraries\include\widgets\Button.h" />
-    <ClInclude Include="Libraries\include\widgets\LabelCheckboxRadio.h" />
-    <ClInclude Include="Libraries\include\widgets\ListBoxSearchBox.h" />
-    <ClInclude Include="Libraries\include\widgets\NewWidgets.h" />
-    <ClInclude Include="Libraries\include\widgets\SliderProgress.h" />
-    <ClInclude Include="Libraries\include\widgets\TabTooltipScrollbar.h" />
-    <ClInclude Include="Libraries\include\widgets\TextBox.h" />
-    <ClInclude Include="Libraries\include\widgets\Widget.h" />
+    <ClInclude Include="include\ImGuiManager.h" />
+    <ClInclude Include="include\pch.h" />
+    <ClInclude Include="include\Render.h" />
+    <ClInclude Include="include\WindowManager.h" />
+    <ClInclude Include="Libraries\include\glad\glad.h" />
+    <ClInclude Include="Libraries\include\ImGUI\imconfig.h" />
+    <ClInclude Include="Libraries\include\ImGUI\imgui.h" />
+    <ClInclude Include="Libraries\include\ImGUI\imgui_impl_glfw.h" />
+    <ClInclude Include="Libraries\include\ImGUI\imgui_impl_opengl3.h" />
+    <ClInclude Include="Libraries\include\ImGUI\imgui_impl_opengl3_loader.h" />
+    <ClInclude Include="Libraries\include\ImGUI\imgui_internal.h" />
+    <ClInclude Include="Libraries\include\ImGUI\imstb_rectpack.h" />
+    <ClInclude Include="Libraries\include\ImGUI\imstb_textedit.h" />
+    <ClInclude Include="Libraries\include\ImGUI\imstb_truetype.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

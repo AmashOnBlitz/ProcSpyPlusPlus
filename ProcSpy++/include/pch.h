@@ -1,0 +1,12 @@
+#pragma once
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <Windows.h>
+#include <tchar.h>
+#include <iostream>
+#include <strsafe.h>
+#include "glad/glad.h"
+#include "GLFW/glfw3.h"
+#include <ImGUI/imgui.h>
+#include <ImGUI/imgui_impl_glfw.h>
+#include <ImGUI/imgui_impl_opengl3.h>
