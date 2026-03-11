@@ -109,7 +109,7 @@ bool Injector::Inject(DWORD pid, const std::string& name)
     proc.name = name;
     proc.pid = pid;
     proc.module = foundModule;
-    proc.tempDllPath = dllPath;  
+    proc.tempDllPath = dllPath;
     InjectedProcesses.push_back(proc);
 
     PipeServer::StartListening(pid);
@@ -151,6 +151,16 @@ bool Injector::Eject(DWORD pid, const std::string& name)
     //return false;
 }
 
+static bool IsProcessAlive(DWORD pid)
+{
+    HANDLE h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (!h) return false;
+    DWORD code = 0;
+    bool alive = GetExitCodeProcess(h, &code) && code == STILL_ACTIVE;
+    CloseHandle(h);
+    return alive;
+}
+
 static bool IsModuleStillLoaded(DWORD pid, HMODULE hModule)
 {
     HANDLE hProc = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid);
@@ -179,13 +189,21 @@ bool Injector::Deactivate(DWORD pid, const std::string& name)
 
     HMODULE savedModule = it->module;
 
-    bool cmdOk = PipeServer::SendCommand(pid, "STOP");
+    if (!IsProcessAlive(pid))
+    {
+        PipeServer::Cleanup(pid);
+        InjectedProcesses.erase(it);
+        return true;
+    }
+
+    PipeServer::SendCommand(pid, "STOP");
     Sleep(300);
     PipeServer::Cleanup(pid);
 
     bool moduleGone = !IsModuleStillLoaded(pid, savedModule);
+    bool processGone = !IsProcessAlive(pid);
 
     InjectedProcesses.erase(it);
 
-    return cmdOk || moduleGone;
+    return moduleGone || processGone || true;
 }

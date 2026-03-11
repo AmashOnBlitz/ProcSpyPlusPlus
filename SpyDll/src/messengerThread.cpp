@@ -3,6 +3,9 @@
 #include "Flags.h"
 #include "messageQueue.h"
 #include <string>
+#include <CMDHandler.h>
+#include <iostream>
+#define CMDSTRING "#cmd|"
 
 static std::string GetPipeName() {
     return "\\\\.\\pipe\\messagePipeline_" + std::to_string(GetCurrentProcessId());
@@ -25,6 +28,8 @@ DWORD WINAPI MessageThread(LPVOID) {
     } while (hPipe == INVALID_HANDLE_VALUE && !ThreadExpectedToStop);
 
     if (hPipe == INVALID_HANDLE_VALUE) return 1;
+    DWORD mode = PIPE_READMODE_MESSAGE;
+    SetNamedPipeHandleState(hPipe, &mode, NULL, NULL);
 
     std::string buff;
     DWORD bytesWritten = 0;
@@ -40,7 +45,7 @@ DWORD WINAPI MessageThread(LPVOID) {
         }
         DWORD available = 0;
         if (PeekNamedPipe(hPipe, NULL, 0, NULL, &available, NULL) && available > 0) {
-            char cmdBuf[64] = {};
+            char cmdBuf[2048] = {};
             DWORD bytesRead = 0;
             if (ReadFile(hPipe, cmdBuf, sizeof(cmdBuf) - 1, &bytesRead, NULL)) {
                 std::string cmd(cmdBuf, bytesRead);
@@ -49,10 +54,15 @@ DWORD WINAPI MessageThread(LPVOID) {
                     const char* ack = "ACK:STOPPED";
                     WriteFile(hPipe, ack, (DWORD)strlen(ack), &bytesWritten, NULL);
                 }
+                else if (cmd.rfind(CMDSTRING, 0) == 0) {
+                    std::cout << "Found #cmd\n";
+                    std::cout << "cmd\n";
+                    extractCMD(cmd);
+                }
             }
         }
 
-        Sleep(500);
+        Sleep(50);
     }
 
     CloseHandle(hPipe);

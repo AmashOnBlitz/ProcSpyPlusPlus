@@ -11,7 +11,7 @@ bool PipeServer::StartListening(DWORD pid)
 
     HANDLE hPipe = CreateNamedPipeA(
         pipeName.c_str(),
-        PIPE_ACCESS_DUPLEX,
+        PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED,
         PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_WAIT,
         1,
         4096, 4096,
@@ -19,8 +19,15 @@ bool PipeServer::StartListening(DWORD pid)
     );
     if (hPipe == INVALID_HANDLE_VALUE) return false;
 
+    HANDLE hEvent = CreateEvent(nullptr, TRUE, FALSE, nullptr);
+    if (!hEvent) {
+        CloseHandle(hPipe);
+        return false;
+    }
+
     auto* entry = new PipeEntry();
     entry->hPipe = hPipe;
+    entry->hReadEvent = hEvent;
     entry->active = true;
 
     {
@@ -32,12 +39,14 @@ bool PipeServer::StartListening(DWORD pid)
     HANDLE hThr = CreateThread(nullptr, 0, ReaderThread, args, 0, nullptr);
     if (!hThr) {
         CloseHandle(hPipe);
+        CloseHandle(hEvent);
         delete entry;
         delete args;
         std::lock_guard<std::mutex> lk(s_mapMutex);
         s_pipes.erase(pid);
         return false;
     }
+
     entry->hThread = hThr;
     return true;
 }
@@ -60,14 +69,35 @@ DWORD WINAPI PipeServer::ReaderThread(LPVOID param)
     if (!connected && GetLastError() != ERROR_PIPE_CONNECTED) return 1;
 
     char buf[4096];
-    DWORD bytesRead = 0;
 
     while (entry->active)
     {
-        BOOL ok = ReadFile(entry->hPipe, buf, sizeof(buf) - 1, &bytesRead, nullptr);
-        if (!ok || bytesRead == 0) {
-            break;
+        OVERLAPPED ov = {};
+        ov.hEvent = entry->hReadEvent;
+        ResetEvent(entry->hReadEvent);
+
+        DWORD bytesRead = 0;
+        BOOL  ok = ReadFile(entry->hPipe, buf, sizeof(buf) - 1, &bytesRead, &ov);
+
+        if (!ok && GetLastError() == ERROR_IO_PENDING)
+        {
+            while (entry->active)
+            {
+                DWORD wait = WaitForSingleObject(entry->hReadEvent, 100);
+                if (wait == WAIT_OBJECT_0) break;
+            }
+
+            if (!entry->active)
+            {
+                CancelIo(entry->hPipe);
+                break;
+            }
+
+            ok = GetOverlappedResult(entry->hPipe, &ov, &bytesRead, FALSE);
         }
+
+        if (!ok || bytesRead == 0) break;
+
         buf[bytesRead] = '\0';
         std::string msg(buf, bytesRead);
 
@@ -92,13 +122,12 @@ bool PipeServer::SendCommand(DWORD pid, const std::string& cmd)
     if (it == s_pipes.end()) return false;
 
     PipeEntry* entry = it->second;
-    entry->active = false; 
+    std::lock_guard<std::mutex> wlk(entry->writeMutex);
 
     DWORD written = 0;
-    BOOL ok = WriteFile(entry->hPipe,
-                        cmd.c_str(), static_cast<DWORD>(cmd.size()),
-                        &written, nullptr);
-    return ok;
+    return WriteFile(entry->hPipe,
+                     cmd.c_str(), static_cast<DWORD>(cmd.size()),
+                     &written, nullptr);
 }
 
 std::vector<std::string> PipeServer::DrainMessages(DWORD pid)
@@ -122,6 +151,8 @@ void PipeServer::Cleanup(DWORD pid)
 
     PipeEntry* entry = it->second;
     entry->active = false;
+
+    CloseHandle(entry->hReadEvent);
     CloseHandle(entry->hPipe);
     CloseHandle(entry->hThread);
     delete entry;

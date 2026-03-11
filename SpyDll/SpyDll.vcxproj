@@ -161,14 +161,22 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="include\APIHook.h" />
+    <ClInclude Include="include\CMDHandler.h" />
     <ClInclude Include="include\Flags.h" />
+    <ClInclude Include="include\HookMethods.h" />
+    <ClInclude Include="include\HookThread.h" />
     <ClInclude Include="include\messageQueue.h" />
     <ClInclude Include="include\messengerThread.h" />
     <ClInclude Include="include\pch.h" />
     <ClInclude Include="Libraries\include\MinHook.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="include\messengerThread.cpp" />
+    <ClCompile Include="src\HookMethods.cpp" />
+    <ClCompile Include="src\APIHook.cpp" />
+    <ClCompile Include="src\HookThread.cpp" />
+    <ClCompile Include="src\CMDHandler.cpp" />
+    <ClCompile Include="src\messengerThread.cpp" />
     <ClCompile Include="src\dllmain.cpp" />
     <ClCompile Include="src\pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>

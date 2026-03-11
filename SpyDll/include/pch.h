@@ -8,6 +8,11 @@
 #include <vector>
 #include <string>
 #include <algorithm>
+#include <filesystem>
+#include <chrono>
+#include <iostream>
+#include <iomanip>
+#include <sstream>
 #include "MinHook.h"
 
 #endif //PCH_H

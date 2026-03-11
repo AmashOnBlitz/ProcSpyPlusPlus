@@ -10,6 +10,9 @@
 #include <PipeServer.h>
 #include <future>
 #include <mutex>
+#include <array>
+
+#define CMDSTRING "#cmd|"
 
 enum class EjectState { Idle, Pending, Done };
 
@@ -28,6 +31,28 @@ struct FailedEntry {
     std::string name;
 };
 
+struct TrackingState {
+    bool track = false;
+    bool block = false;
+};
+
+static const char* g_trackingLabels[] = {
+    "Registry Read",
+    "Registry Write",
+    "File Read",
+    "File Write",
+    "Network Send",
+    "Network Receive",
+    "Thread Create",
+    "Memory Alloc",
+    "DLL Load",
+    "Clipboard Access",
+    "Screenshot Capture",
+    "Message Box Create",
+};
+static constexpr int g_trackingCount = (int)(sizeof(g_trackingLabels) / sizeof(g_trackingLabels[0]));
+
+static std::unordered_map<DWORD, std::array<TrackingState, 12>> g_trackingStates;
 static std::unordered_map<DWORD, std::vector<std::string>> g_activityLog;
 static std::vector<ProcessEntry>  g_processList;
 static std::vector<uint8_t>       g_processSelected;
@@ -95,10 +120,13 @@ static void DoInjectSelected() {
         for (auto& inj : g_injectedList)
             if (inj.pid == g_processList[i].pid) { already = true; break; }
         if (already) continue;
-        if (InjectProcess(g_processList[i].pid, g_processList[i].name))
+        if (InjectProcess(g_processList[i].pid, g_processList[i].name)) {
             g_injectedList.push_back({ g_processList[i].pid, g_processList[i].name });
-        else
+            g_trackingStates[g_processList[i].pid] = {};
+        }
+        else {
             g_injectFailed.push_back({ g_processList[i].pid, g_processList[i].name });
+        }
     }
 }
 
@@ -119,6 +147,7 @@ static void PollEjectAllResult() {
 
     for (DWORD pid : g_ejectAllSucceeded) {
         g_activityLog.erase(pid);
+        g_trackingStates.erase(pid);
         auto it = std::find_if(g_injectedList.begin(), g_injectedList.end(),
                                [pid](const InjectedEntry& e) { return e.pid == pid; });
         if (it != g_injectedList.end()) g_injectedList.erase(it);
@@ -145,6 +174,7 @@ static void PollEjectOneResult() {
 
     for (DWORD pid : g_ejectAllSucceeded) {
         g_activityLog.erase(pid);
+        g_trackingStates.erase(pid);
         auto it = std::find_if(g_injectedList.begin(), g_injectedList.end(),
                                [pid](const InjectedEntry& e) { return e.pid == pid; });
         if (it != g_injectedList.end()) {
@@ -277,22 +307,24 @@ static void RenderInjectModal() {
             if (!filterLow.empty() && nameLow.find(filterLow) == std::string::npos) continue;
 
             bool checked = (g_processSelected[i] != 0);
-            if (checked)
+            const bool wasChecked = checked;
+
+            if (wasChecked)
                 ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.18f, 0.85f, 0.65f, 1.0f));
 
             char cbId[32];
             snprintf(cbId, sizeof(cbId), "##cb%d", i);
             if (ImGui::Checkbox(cbId, &checked))
                 g_processSelected[i] = checked ? 1 : 0;
-            ImGui::SameLine();
 
+            ImGui::SameLine();
             char rowLabel[256];
             snprintf(rowLabel, sizeof(rowLabel), "%-38s PID: %lu",
                      proc.name.c_str(), (unsigned long)proc.pid);
             if (ImGui::Selectable(rowLabel, checked, ImGuiSelectableFlags_SpanAllColumns))
                 g_processSelected[i] = checked ? 0 : 1;
 
-            if (checked) ImGui::PopStyleColor();
+            if (wasChecked) ImGui::PopStyleColor();
         }
 
         ImGui::PopStyleColor(6);
@@ -615,6 +647,99 @@ static void RenderMenuBar() {
     ImGui::PopStyleColor(5);
 }
 
+static void RenderTrackingPanel(float width, float height) {
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.10f, 0.11f, 0.14f, 1.0f));
+    ImGui::BeginChild("TrackingPanel", ImVec2(width, height), true);
+
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.18f, 0.85f, 0.65f, 0.7f));
+    ImGui::Dummy(ImVec2(0, 2));
+    ImGui::Text("  TRACKING (T --> Tracking, B --> Block)");
+    ImGui::PopStyleColor();
+    ImGui::Separator();
+    ImGui::Dummy(ImVec2(0, 3));
+
+    float availW = ImGui::GetContentRegionAvail().x;
+    float colW = availW * 0.5f;
+    float cbSpacing = ImGui::GetStyle().ItemSpacing.x;
+
+    DWORD          pid = 0;
+    TrackingState* states = nullptr;
+    bool           hasState = false;
+
+    if (g_injectedSelectedIdx >= 0 && g_injectedSelectedIdx < (int)g_injectedList.size()) {
+        pid = g_injectedList[g_injectedSelectedIdx].pid;
+        auto it = g_trackingStates.find(pid);
+        if (it != g_trackingStates.end()) {
+            states = it->second.data();
+            hasState = true;
+        }
+    }
+
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.12f, 0.14f, 0.17f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.16f, 0.18f, 0.22f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.18f, 0.20f, 0.25f, 1.0f));
+
+    for (int i = 0; i < g_trackingCount; i++) {
+        int col = i % 2;
+
+        if (!hasState) ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.35f);
+
+        if (col == 1)
+            ImGui::SameLine(colW + 4.0f);
+
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.72f, 0.78f, 0.84f, 1.0f));
+        ImGui::Text("  %s", g_trackingLabels[i]);
+        ImGui::PopStyleColor();
+
+        ImGui::SameLine(col == 0 ? colW - 84.0f : colW + colW - 84.0f);
+
+        bool trackVal = hasState ? states[i].track : false;
+        ImGui::PushStyleColor(ImGuiCol_CheckMark, ImVec4(0.18f, 0.85f, 0.65f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Text, trackVal
+                              ? ImVec4(0.18f, 0.85f, 0.65f, 1.0f)
+                              : ImVec4(0.40f, 0.44f, 0.50f, 1.0f));
+        char trackId[32];
+        snprintf(trackId, sizeof(trackId), "T##t%d", i);
+        if (ImGui::Checkbox(trackId, &trackVal) && hasState) {
+            states[i].track = trackVal;
+            std::string cmd = CMDSTRING;
+            cmd += trackVal ? "Track|" : "NoTrack|";
+            cmd += g_trackingLabels[i];
+            PipeServer::SendCommand(pid, cmd);
+        }
+        ImGui::PopStyleColor(2);
+
+        ImGui::SameLine(0, cbSpacing);
+
+        bool blockVal = hasState ? states[i].block : false;
+        ImGui::PushStyleColor(ImGuiCol_CheckMark, ImVec4(0.85f, 0.28f, 0.28f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.30f, 0.10f, 0.10f, 0.6f));
+        ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.40f, 0.12f, 0.12f, 0.8f));
+        ImGui::PushStyleColor(ImGuiCol_Text, blockVal
+                              ? ImVec4(0.90f, 0.32f, 0.32f, 1.0f)
+                              : ImVec4(0.40f, 0.44f, 0.50f, 1.0f));
+        char blockId[32];
+        snprintf(blockId, sizeof(blockId), "B##b%d", i);
+        if (ImGui::Checkbox(blockId, &blockVal) && hasState) {
+            states[i].block = blockVal;
+            std::string cmd = CMDSTRING;
+            cmd += blockVal ? "Block|" : "NoBlock|";
+            cmd += g_trackingLabels[i];
+            PipeServer::SendCommand(pid, cmd);
+        }
+        ImGui::PopStyleColor(4);
+
+        if (!hasState) ImGui::PopStyleVar();
+
+        if (col == 1 || i == g_trackingCount - 1)
+            ImGui::Dummy(ImVec2(0, 1));
+    }
+
+    ImGui::PopStyleColor(3);
+    ImGui::EndChild();
+    ImGui::PopStyleColor();
+}
+
 void Render(ImGuiWindowFlags flags) {
     ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.08f, 0.09f, 0.11f, 1.0f));
     ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.10f, 0.11f, 0.14f, 1.0f));
@@ -648,6 +773,9 @@ void Render(ImGuiWindowFlags flags) {
     float  listWidth = windowSize.x * 0.35f;
     float  rightWidth = windowSize.x - listWidth - ImGui::GetStyle().ItemSpacing.x;
 
+    float trackingH = panelH * 0.40f;
+    float activityH = panelH - trackingH - ImGui::GetStyle().ItemSpacing.y;
+
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 4));
 
@@ -670,7 +798,8 @@ void Render(ImGuiWindowFlags flags) {
 
     for (int i = 0; i < (int)g_injectedList.size(); i++) {
         bool sel = (g_injectedSelectedIdx == i);
-        if (sel) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.18f, 0.85f, 0.65f, 1.0f));
+        const bool wasSel = sel;
+        if (wasSel) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.18f, 0.85f, 0.65f, 1.0f));
 
         char rowLabel[256];
         snprintf(rowLabel, sizeof(rowLabel), "  %-26s  %lu",
@@ -678,13 +807,15 @@ void Render(ImGuiWindowFlags flags) {
         if (ImGui::Selectable(rowLabel, sel))
             g_injectedSelectedIdx = (g_injectedSelectedIdx == i) ? -1 : i;
 
-        if (sel) ImGui::PopStyleColor();
+        if (wasSel) ImGui::PopStyleColor();
     }
 
     ImGui::EndChild();
     ImGui::SameLine(0, 8);
 
-    ImGui::BeginChild("ActivityPanel", ImVec2(rightWidth, panelH), true);
+    ImGui::BeginGroup();
+
+    ImGui::BeginChild("ActivityPanel", ImVec2(rightWidth, activityH), true);
 
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.18f, 0.85f, 0.65f, 0.7f));
     ImGui::Dummy(ImVec2(0, 2));
@@ -735,6 +866,11 @@ void Render(ImGuiWindowFlags flags) {
     }
 
     ImGui::EndChild();
+
+    RenderTrackingPanel(rightWidth, trackingH);
+
+    ImGui::EndGroup();
+
     ImGui::PopStyleVar(2);
 
     ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.06f, 0.07f, 0.09f, 1.0f));

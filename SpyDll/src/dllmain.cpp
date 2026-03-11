@@ -4,7 +4,26 @@
 #include <iostream>
 #include <atomic>
 #include <Flags.h>
+#include <HookThread.h>
 std::atomic<bool> running = true;
+
+void InitDebugConsole()
+{
+    AllocConsole();
+
+    FILE* f;
+    freopen_s(&f, "CONOUT$", "w", stdout);
+    freopen_s(&f, "CONOUT$", "w", stderr);
+    freopen_s(&f, "CONIN$", "r", stdin);
+    std::cout.setf(std::ios::unitbuf);   // <- auto flush
+    std::cerr.setf(std::ios::unitbuf);
+    std::cout.clear();
+    std::cerr.clear();
+    std::cin.clear();
+
+    std::cout << "[DLL] Console initialized\n";
+}
+
 
 std::string ExtractName(const std::string& path)
 {
@@ -29,23 +48,13 @@ std::string GetSysTime() {
     return std::to_string(st.wHour) + ":" + std::to_string(st.wMinute) + ":" + std::to_string(st.wSecond);
 }
 
-DWORD WINAPI NetworkMonitorThread(LPVOID) {
-    HANDLE hDevice = nullptr;
-
-    while (!ThreadExpectedToStop) {
-        messenger::PutMessage("network event");
-
-        Sleep(1000);
-    }
-    if (hDevice) CloseHandle(hDevice);
-    return 0;
-}
-
 DWORD WINAPI MainThread(LPVOID) {
+    InitDebugConsole();
+    Sleep(200);
     CreateThread(nullptr, 0, MessageThread, nullptr, 0, nullptr);
     std::string msg = "Dll injected in " + GetProcessName() + " at " + GetSysTime();
     messenger::PutMessage(msg);
-    CreateThread(nullptr, 0, NetworkMonitorThread, nullptr, 0, nullptr);
+    CreateThread(nullptr, 0, HookThread, nullptr, 0, nullptr);
     return 0;
 }
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID){
