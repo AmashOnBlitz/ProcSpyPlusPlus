@@ -2,7 +2,7 @@
 #include <Windows.h>
 #include <atomic>
 
-inline static std::atomic<bool> refreshHooks = true;
+inline std::atomic<bool> refreshHooks = true;
 
 DWORD WINAPI HookThread(LPVOID);
 void fnRefreshHooks();

@@ -8,11 +8,11 @@ inline std::string GetTrackStr(std::string str) {
     return std::string(STR_TRACKPREFIX + str);
 }
 
-namespace HookMethods{
+namespace HookMethods {
     namespace File {
         namespace Write {
-            inline static std::atomic<bool> WriteEnabled = true;
-            inline static std::atomic<bool> DebugEnabled = false;
+            inline std::atomic<bool> WriteEnabled = true;
+            inline std::atomic<bool> DebugEnabled = false;
             typedef HANDLE(WINAPI* CreateFileA_t)(
                 LPCSTR,
                 DWORD,
@@ -54,10 +54,10 @@ namespace HookMethods{
             );
         } // !Write
     } // !File
-    
+
     namespace MsgBox {
-        inline static std::atomic<bool> MsgBoxEnabled = true;
-        inline static std::atomic<bool> DebugEnabled = false;
+        inline std::atomic<bool> MsgBoxEnabled = true;
+        inline std::atomic<bool> DebugEnabled = false;
 
         typedef int (WINAPI* MessageBoxA_t)(
             HWND,
@@ -113,7 +113,7 @@ namespace HookMethods{
             );
         }; // !File
         namespace MsgBox {
-             std::string getMsgBoxDebugString(
+            std::string getMsgBoxDebugString(
                 HWND hWnd,
                 const void* text,
                 const void* caption,

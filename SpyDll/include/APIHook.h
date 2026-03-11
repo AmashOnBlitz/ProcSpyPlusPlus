@@ -30,19 +30,19 @@ namespace APIHook {
         bool debug;
     };
 
-    static inline std::vector<APIFunctionsStruct> APIFunctions = {
-        {HookID::RegistryRead, "Registry Read", false, false},
-        {HookID::RegistryWrite, "Registry Write", false, false},
-        {HookID::FileRead, "File Read", false, false},
-        {HookID::FileWrite, "File Write", false, false},
-        {HookID::NetworkSend, "Network Send", false, false},
-        {HookID::NetworkReceive, "Network Receive", false, false},
-        {HookID::MessageBoxCreate, "Message Box Create", false, false},
-        {HookID::ThreadCreate, "Thread Create", false, false},
-        {HookID::MemoryAlloc, "Memory Alloc", false, false},
-        {HookID::DLLLoad, "DLL Load", false, false},
-        {HookID::ClipboardAccess, "Clipboard Access", false, false},
-        {HookID::ScreenshotCapture, "Screenshot Capture", false, false},
+    inline std::vector<APIFunctionsStruct> APIFunctions = {
+        {HookID::RegistryRead, "Registry Read", true, false},
+        {HookID::RegistryWrite, "Registry Write", true, false},
+        {HookID::FileRead, "File Read", true, false},
+        {HookID::FileWrite, "File Write", true, false},
+        {HookID::NetworkSend, "Network Send", true, false},
+        {HookID::NetworkReceive, "Network Receive", true, false},
+        {HookID::MessageBoxCreate, "Message Box Create", true, false},
+        {HookID::ThreadCreate, "Thread Create", true, false},
+        {HookID::MemoryAlloc, "Memory Alloc", true, false},
+        {HookID::DLLLoad, "DLL Load", true, false},
+        {HookID::ClipboardAccess, "Clipboard Access", true, false},
+        {HookID::ScreenshotCapture, "Screenshot Capture", true, false},
     };
 
     bool setHook(const std::string& name, bool state, bool isEnabledFlag, std::string& err);
