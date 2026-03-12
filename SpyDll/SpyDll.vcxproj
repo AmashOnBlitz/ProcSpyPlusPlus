@@ -172,8 +172,10 @@
     <ClInclude Include="Libraries\include\MinHook.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="src\HookMethodsDebugs.cpp" />
     <ClCompile Include="src\HookMethods.cpp" />
     <ClCompile Include="src\APIHook.cpp" />
+    <ClCompile Include="src\HookMethodsUtility.cpp" />
     <ClCompile Include="src\HookThread.cpp" />
     <ClCompile Include="src\CMDHandler.cpp" />
     <ClCompile Include="src\messengerThread.cpp" />

@@ -103,7 +103,7 @@ DWORD WINAPI PipeServer::ReaderThread(LPVOID param)
 
         if (msg == "ACK:STOPPED") {
             std::lock_guard<std::mutex> lk(entry->msgMutex);
-            entry->messages.push_back("[system] DLL acknowledged stop");
+            entry->messages.push_back("[System] DLL acknowledged stop");
             break;
         }
 

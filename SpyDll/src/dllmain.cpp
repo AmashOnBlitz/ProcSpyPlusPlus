@@ -15,13 +15,10 @@ void InitDebugConsole()
     freopen_s(&f, "CONOUT$", "w", stdout);
     freopen_s(&f, "CONOUT$", "w", stderr);
     freopen_s(&f, "CONIN$", "r", stdin);
-    std::cout.setf(std::ios::unitbuf);   // <- auto flush
     std::cerr.setf(std::ios::unitbuf);
-    std::cout.clear();
     std::cerr.clear();
     std::cin.clear();
 
-    std::cout << "[DLL] Console initialized\n";
 }
 
 
@@ -49,8 +46,7 @@ std::string GetSysTime() {
 }
 
 DWORD WINAPI MainThread(LPVOID) {
-    InitDebugConsole();
-    Sleep(200);
+    //InitDebugConsole();
     CreateThread(nullptr, 0, MessageThread, nullptr, 0, nullptr);
     std::string msg = "Dll injected in " + GetProcessName() + " at " + GetSysTime();
     messenger::PutMessage(msg);

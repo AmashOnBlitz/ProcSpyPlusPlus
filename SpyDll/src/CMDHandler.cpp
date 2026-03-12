@@ -7,8 +7,6 @@
 #include <HookThread.h>
 
 void extractCMD(std::string msg){
-    std::cout << "Revieved Msg\n";
-    std::cout << msg.c_str() << "\n";
     std::vector<std::string> tokens;
     char delimiter = '|';
     size_t start = 0;

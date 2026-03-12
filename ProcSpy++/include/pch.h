@@ -5,6 +5,10 @@
 #include <tchar.h>
 #include <iostream>
 #include <strsafe.h>
+#include <algorithm>
+#include <unordered_map>
+#include <vector>
+#include <string>
 #include "glad/glad.h"
 #include "GLFW/glfw3.h"
 #include <ImGUI/imgui.h>

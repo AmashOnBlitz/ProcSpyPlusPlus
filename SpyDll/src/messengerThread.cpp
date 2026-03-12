@@ -55,14 +55,12 @@ DWORD WINAPI MessageThread(LPVOID) {
                     WriteFile(hPipe, ack, (DWORD)strlen(ack), &bytesWritten, NULL);
                 }
                 else if (cmd.rfind(CMDSTRING, 0) == 0) {
-                    std::cout << "Found #cmd\n";
-                    std::cout << "cmd\n";
                     extractCMD(cmd);
                 }
             }
         }
 
-        Sleep(50);
+        Sleep(20);
     }
 
     CloseHandle(hPipe);

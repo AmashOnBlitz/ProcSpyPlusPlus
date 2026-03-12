@@ -12,7 +12,6 @@ bool APIHook::setHook(const std::string& name, bool state, bool isEnabledFlag, s
 
 bool APIHook::updateHookTable(const std::string& name, bool state, bool isEnabledFlag, std::string& err)
 {
-    std::cout << "Updating Hook Table\n";
     bool found = false;
     std::lock_guard<std::mutex> lock(APITableMutex);
     for (APIFunctionsStruct& APIFunc : APIFunctions) {

@@ -8,5 +8,7 @@ DWORD WINAPI HookThread(LPVOID);
 void fnRefreshHooks();
 
 
+void HookFileCreate(bool funcEnabled, bool debEnabled);
+void HookFileRead(bool funcEnabled, bool debEnabled);
 void HookFileWrite(bool funcEnabled, bool debEnabled);
 void HookMsgBoxCreate(bool funcEnabled, bool debEnabled);

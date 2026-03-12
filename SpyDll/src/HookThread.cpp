@@ -12,75 +12,109 @@ DWORD WINAPI HookThread(LPVOID) {
 			fnRefreshHooks();
 			refreshHooks = false;
 		}
-		Sleep(100);
+		Sleep(50);
 	}
 	return 0;
 }
 
-inline void fnRefreshHooks()
+void fnRefreshHooks()
 {
 	static bool isMHInit = false;
 	if (!isMHInit) {
 		if (MH_Initialize() == MH_OK) {
 			isMHInit = true;
-			std::cout << "MH Init Done\n";
 		}
 	}
 	std::lock_guard<std::mutex> lock(APIHook::APITableMutex);
 	for (APIHook::APIFunctionsStruct& APIHookEntry : APIHook::APIFunctions) {
 		switch (APIHookEntry.id)
 		{
+		case APIHook::HookID::FileCreate:
+		{
+			HookFileCreate(APIHookEntry.funcEnabled,APIHookEntry.debug);
+			break;
+		}
+		case APIHook::HookID::FileRead:
+		{
+			HookFileRead(APIHookEntry.funcEnabled, APIHookEntry.debug);
+			break;
+		}
 		case APIHook::HookID::FileWrite:
 		{
-			HookFileWrite(APIHookEntry.funcEnabled,APIHookEntry.debug);
-			std::cout << "Hooked File Write\n";
-			std::cout << (("Enabled: " + std::string(APIHookEntry.funcEnabled ? "true" : "false") + " Debug: " + std::string(APIHookEntry.debug ? "true" : "false")).c_str()) << "\n";
+			HookFileWrite(APIHookEntry.funcEnabled, APIHookEntry.debug);
 			break;
 		}
 		case APIHook::HookID::MessageBoxCreate:
 		{
 			HookMsgBoxCreate(APIHookEntry.funcEnabled, APIHookEntry.debug);
-			std::cout << "Hooked Msg Box";
-			std::cout << ("Enabled: " + std::string(APIHookEntry.funcEnabled ? "true" : "false") + " Debug: " + std::string(APIHookEntry.debug ? "true" : "false")) << "\n";
 			break;
 		}
 		default:
 			break;
 		}
 	}
-	static bool MHHooksInit = false;
-	if (!MHHooksInit) {
+	static bool MHHooksEnabled = false;
+	if (!MHHooksEnabled) {
 		if (MH_EnableHook(MH_ALL_HOOKS) == MH_OK) {
-			MHHooksInit = true;
-			std::cout << "All Hooks Init\n";
+			MHHooksEnabled = true;
 		}
 		else {
-			std::cout << "All Hooks Init Failed!\n";
 		}
 	}
 }
 
-inline void HookFileWrite(bool funcEnabled, bool debEnabled)
+void HookFileCreate(bool funcEnabled, bool debEnabled)
 {
-	HookMethods::File::Write::DebugEnabled = debEnabled;
-	HookMethods::File::Write::WriteEnabled = funcEnabled;
-	static bool fileHooked = false;
-	if (!fileHooked) {
+	HookMethods::File::Creation::DebugEnabled = debEnabled;
+	HookMethods::File::Creation::CreateEnabled = funcEnabled;
+	static bool fileCreateHooked = false;
+	if (!fileCreateHooked) {
 		MH_CreateHook(
 			&CreateFileW,
-			&HookMethods::File::Write::CreateFileWHook,
-			reinterpret_cast<void**>(&HookMethods::File::Write::OriginalCreateFileW)
+			&HookMethods::File::Creation::CreateFileWHook,
+			reinterpret_cast<void**>(&HookMethods::File::Creation::OriginalCreateFileW)
 		);
 		MH_CreateHook(
 			&CreateFileA,
-			&HookMethods::File::Write::CreateFileAHook,
-			reinterpret_cast<void**>(&HookMethods::File::Write::OriginalCreateFileA)
+			&HookMethods::File::Creation::CreateFileAHook,
+			reinterpret_cast<void**>(&HookMethods::File::Creation::OriginalCreateFileA)
 		);
-		fileHooked = true;
+		fileCreateHooked = true;
 	}
 }
 
-inline void HookMsgBoxCreate(bool funcEnabled, bool debEnabled)
+void HookFileRead(bool funcEnabled, bool debEnabled)
+{
+	HookMethods::File::Read::DebugEnabled = debEnabled;
+	HookMethods::File::Read::ReadEnabled = funcEnabled;
+	static bool fileReadHooked = false;
+	if (!fileReadHooked) {
+		MH_CreateHook(
+			&ReadFile,
+			&HookMethods::File::Read::ReadFileHook,
+			reinterpret_cast<void**>(&HookMethods::File::Read::OriginalReadFile)
+		);
+		fileReadHooked = true;
+	}
+}
+
+void HookFileWrite(bool funcEnabled, bool debEnabled)
+{
+	HookMethods::File::Write::DebugEnabled = debEnabled;
+	HookMethods::File::Write::WriteEnabled = funcEnabled;
+
+	static bool fileWriteHooked = false;
+	if (!fileWriteHooked) {
+		MH_CreateHook(
+			&WriteFile,
+			&HookMethods::File::Write::WriteFileHook,
+			reinterpret_cast<void**>(&HookMethods::File::Write::OriginalWriteFile)
+		);
+		fileWriteHooked = true;
+	}
+}
+
+void HookMsgBoxCreate(bool funcEnabled, bool debEnabled)
 {
 	HookMethods::MsgBox::DebugEnabled = debEnabled;
 	HookMethods::MsgBox::MsgBoxEnabled = funcEnabled;

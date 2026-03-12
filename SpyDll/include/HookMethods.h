@@ -10,8 +10,8 @@ inline std::string GetTrackStr(std::string str) {
 
 namespace HookMethods {
     namespace File {
-        namespace Write {
-            inline std::atomic<bool> WriteEnabled = true;
+        namespace Creation {
+            inline std::atomic<bool> CreateEnabled = true;
             inline std::atomic<bool> DebugEnabled = false;
             typedef HANDLE(WINAPI* CreateFileA_t)(
                 LPCSTR,
@@ -51,6 +51,48 @@ namespace HookMethods {
                 DWORD creation,
                 DWORD flags,
                 HANDLE templateFile
+            );
+        } // !Creation
+        namespace Read {
+            inline std::atomic<bool> ReadEnabled = true;
+            inline std::atomic<bool> DebugEnabled = false;
+            typedef BOOL(WINAPI* ReadFile_t)(
+                HANDLE,
+                LPVOID,
+                DWORD,
+                LPDWORD,
+                LPOVERLAPPED
+                );
+
+            inline ReadFile_t OriginalReadFile = nullptr;
+
+            BOOL WINAPI ReadFileHook(
+                HANDLE hFile,
+                LPVOID buffer,
+                DWORD bytesToRead,
+                LPDWORD bytesRead,
+                LPOVERLAPPED overlapped
+            );
+        }// !Read
+        namespace Write {
+            inline std::atomic<bool> WriteEnabled = true;
+            inline std::atomic<bool> DebugEnabled = false;
+
+            typedef BOOL(WINAPI* WriteFile_t)(
+                HANDLE,
+                LPCVOID,
+                DWORD,
+                LPDWORD,
+                LPOVERLAPPED
+            );
+            inline WriteFile_t OriginalWriteFile = nullptr;
+
+            BOOL WINAPI WriteFileHook(
+                HANDLE       hFile,
+                LPCVOID      lpBuffer,
+                DWORD        nNumberOfBytesToWrite,
+                LPDWORD      lpNumberOfBytesWritten,
+                LPOVERLAPPED lpOverlapped
             );
         } // !Write
     } // !File
@@ -92,6 +134,8 @@ namespace HookMethods {
 
     }; // !MsgBox
 
+
+
     namespace Utility {
         std::string DecodeAccess(DWORD access);
         std::string DecodeFlags(DWORD flags);
@@ -101,7 +145,9 @@ namespace HookMethods {
         std::string GetTimestamp();
 
         namespace File {
-            std::string getFileWriteDebugString(
+            std::string GetPathFromHandle(HANDLE hFile);
+
+            std::string getFileCreateDebugString(
                 const void* fileName,
                 DWORD access,
                 DWORD shareMode,
@@ -111,6 +157,23 @@ namespace HookMethods {
                 HANDLE templateFile,
                 bool isWide
             );
+
+            std::string getFileReadDebugString(
+                HANDLE hFile,
+                LPVOID buffer,
+                DWORD bytesToRead,
+                LPDWORD bytesRead,
+                LPOVERLAPPED overlapped
+            );
+
+            std::string getFileWriteDebugString(
+                HANDLE hFile,
+                LPCVOID buffer,
+                DWORD bytesToWrite,
+                LPDWORD bytesWritten,
+                LPOVERLAPPED overlapped
+            );
+
         }; // !File
         namespace MsgBox {
             std::string getMsgBoxDebugString(

@@ -4,7 +4,7 @@
 #include "Render.h"
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int) {
-    GLFWwindow* window = WindowManager::InitWindow(1200, 600, "ProcSpy++");
+    GLFWwindow* window = WindowManager::InitWindow(1440, 860, "ProcSpy++");
     if (!window) return 1;
 
     int last_fb_w = 0, last_fb_h = 0;
@@ -25,7 +25,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int) {
         ImGuiIO& io = ImGui::GetIO();
         io.DisplaySize = ImVec2((float)win_w, (float)win_h);
         io.DisplayFramebufferScale = ImVec2((float)last_fb_w / win_w, (float)last_fb_h / win_h);
-        io.FontGlobalScale = std::min((float)win_w / 800.0f, (float)win_h / 600.0f);
+        io.FontGlobalScale = 1.0f;
 
         ImGui::SetNextWindowPos(ImVec2(0, 0));  
         ImGui::SetNextWindowSize(io.DisplaySize);
@@ -43,7 +43,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int) {
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
-
+    CleanupAPIHooks();
+    EjectAllSync();
     ImGuiManager::Shutdown();
     glfwDestroyWindow(window);
     glfwTerminate();
