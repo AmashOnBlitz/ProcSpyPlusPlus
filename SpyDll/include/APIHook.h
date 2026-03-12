@@ -10,6 +10,7 @@ namespace APIHook {
     {
         RegistryRead,
         RegistryWrite,
+        FileCreate,
         FileRead,
         FileWrite,
         NetworkSend,
@@ -33,6 +34,7 @@ namespace APIHook {
     inline std::vector<APIFunctionsStruct> APIFunctions = {
         {HookID::RegistryRead, "Registry Read", true, false},
         {HookID::RegistryWrite, "Registry Write", true, false},
+        {HookID::FileCreate, "File Create", true, false},
         {HookID::FileRead, "File Read", true, false},
         {HookID::FileWrite, "File Write", true, false},
         {HookID::NetworkSend, "Network Send", true, false},

@@ -39,6 +39,7 @@ struct TrackingState {
 static const char* g_trackingLabels[] = {
     "Registry Read",
     "Registry Write",
+    "File Create"
     "File Read",
     "File Write",
     "Network Send",
@@ -52,7 +53,7 @@ static const char* g_trackingLabels[] = {
 };
 static constexpr int g_trackingCount = (int)(sizeof(g_trackingLabels) / sizeof(g_trackingLabels[0]));
 
-static std::unordered_map<DWORD, std::array<TrackingState, 12>> g_trackingStates;
+static std::unordered_map<DWORD, std::array<TrackingState, g_trackingCount>> g_trackingStates;;
 static std::unordered_map<DWORD, std::vector<std::string>> g_activityLog;
 static std::vector<ProcessEntry>  g_processList;
 static std::vector<uint8_t>       g_processSelected;
