@@ -32,11 +32,25 @@ std::string HookMethods::Utility::File::getFileCreateDebugString(
         GetFullPathNameA(name, MAX_PATH, fullPath, nullptr);
 
         finalPath = fullPath;
+
+        if (finalPath.rfind("\\\\?\\", 0) == 0)
+        {
+            finalPath = finalPath.substr(4);
+        }
+        if (finalPath.rfind("\\?\\", 0) == 0)
+        {
+            finalPath = finalPath.substr(4);
+        }
+        if (finalPath.rfind("UNC\\", 0) == 0)
+        {
+            finalPath = "\\" + finalPath.substr(3);
+        }
     }
 
     std::ostringstream ss;
-
-    ss << GetTrackStr("FILE CREATE")
+    bool fileExisted = (GetFileAttributesA(finalPath.c_str()) != INVALID_FILE_ATTRIBUTES);
+    std::string intent = Utility::DecodeFileIntent(access, creation, flags, fileExisted);
+    ss << GetTrackStr("FILE " + intent)
         << " | " << (HookMethods::File::Creation::CreateEnabled ? "ALLOWED" : "BLOCKED")
         << "\n    Time    : " << Utility::GetTimestamp()
         << "\n    API        : " << (isWide ? "CreateFileW" : "CreateFileA")
@@ -74,17 +88,41 @@ std::string HookMethods::Utility::File::getFileReadDebugString(
     return ss.str();
 }
 
+std::string HookMethods::Utility::File::getFileReadExDebugString(
+    HANDLE hFile,
+    LPVOID lpBuffer,
+    DWORD nNumberOfBytesToRead,
+    LPOVERLAPPED lpOverlapped,
+    LPOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine
+)
+{
+    std::ostringstream ss;
+
+    ss << GetTrackStr("FILE READ EX")
+        << " | " << (HookMethods::File::Read::ReadEnabled ? "ALLOWED" : "BLOCKED")
+        << "\n    Time    : " << Utility::GetTimestamp()
+        << "\n    API        : ReadFileEx"
+        << "\n    Handle     : " << hFile
+        << "\n    Path       : " << Utility::File::GetPathFromHandle(hFile)
+        << "\n    Bytes Req  : " << nNumberOfBytesToRead
+        << "\n    Completion : " << (lpCompletionRoutine ? "PROVIDED" : "NONE")
+        << "\n    Mode       : ASYNC";
+
+    return ss.str();
+}
+
 std::string HookMethods::Utility::File::getFileWriteDebugString(
     HANDLE hFile,
     LPCVOID buffer,
     DWORD bytesToWrite,
     LPDWORD bytesWritten,
-    LPOVERLAPPED overlapped
+    LPOVERLAPPED overlapped,
+    bool allowed
 )
 {
     std::ostringstream ss;
 
-    DWORD written = (bytesWritten) ? *bytesWritten : 0;
+    DWORD written = (allowed) ? *bytesWritten : 0;
 
     ss << GetTrackStr("FILE WRITE")
         << " | " << (HookMethods::File::Write::WriteEnabled ? "ALLOWED" : "BLOCKED")
@@ -99,6 +137,28 @@ std::string HookMethods::Utility::File::getFileWriteDebugString(
     return ss.str();
 }
 
+std::string HookMethods::Utility::File::getFileWriteExDebugString(
+    HANDLE hFile,
+    LPCVOID lpBuffer,
+    DWORD nNumberOfBytesToWrite,
+    LPOVERLAPPED lpOverlapped,
+    LPOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine
+)
+{
+    std::ostringstream ss;
+
+    ss << GetTrackStr("FILE WRITE EX")
+        << " | " << (HookMethods::File::Write::WriteEnabled ? "ALLOWED" : "BLOCKED")
+        << "\n    Time    : " << Utility::GetTimestamp()
+        << "\n    API        : WriteFileEx"
+        << "\n    Handle     : " << hFile
+        << "\n    Path       : " << Utility::File::GetPathFromHandle(hFile)
+        << "\n    Bytes Req  : " << nNumberOfBytesToWrite
+        << "\n    Completion : " << (lpCompletionRoutine ? "PROVIDED" : "NONE")
+        << "\n    Mode       : ASYNC";
+
+    return ss.str();
+}
 
 std::string HookMethods::Utility::MsgBox::getMsgBoxDebugString(
     HWND hWnd,
@@ -139,5 +199,66 @@ std::string HookMethods::Utility::MsgBox::getMsgBoxDebugString(
         << "\n    Caption : " << finalCaption
         << "\n    Text    : " << finalText
         << "\n    Type    : " << typeStr;
+    return ss.str();
+}
+
+std::string HookMethods::Utility::Registry::getRegReadDebugString(
+    HKEY hKey,
+    const void* lpValueName,
+    LPDWORD lpType,
+    LPBYTE lpData,
+    LPDWORD lpcbData,
+    LONG result,
+    bool isWide
+)
+{
+    std::string finalValueName;
+    if (isWide)
+        finalValueName = Utility::WStringToString(static_cast<LPCWSTR>(lpValueName));
+    else
+        finalValueName = static_cast<LPCSTR>(lpValueName) ? static_cast<LPCSTR>(lpValueName) : "";
+
+    DWORD dataSize = (lpcbData) ? *lpcbData : 0;
+    DWORD regType = (lpType) ? *lpType : REG_NONE;
+
+    std::ostringstream ss;
+    ss << GetTrackStr("REGISTRY READ")
+        << " | " << (HookMethods::Registry::Read::ReadEnabled ? "ALLOWED" : "BLOCKED")
+        << "\n    Time    : " << Utility::GetTimestamp()
+        << "\n    API        : " << (isWide ? "RegQueryValueExW" : "RegQueryValueExA")
+        << "\n    Key        : " << Utility::Registry::GetKeyNameFromHandle(hKey)
+        << "\n    Value      : " << finalValueName
+        << "\n    Type       : " << Utility::Registry::DecodeRegType(regType)
+        << "\n    Data Size  : " << dataSize
+        << "\n    Result     : " << (result == ERROR_SUCCESS ? "SUCCESS" : "FAILED(" + std::to_string(result) + ")");
+    return ss.str();
+}
+
+std::string HookMethods::Utility::Registry::getRegWriteDebugString(
+    HKEY hKey,
+    const void* lpValueName,
+    DWORD dwType,
+    const BYTE* lpData,
+    DWORD cbData,
+    LONG result,
+    bool isWide
+)
+{
+    std::string finalValueName;
+    if (isWide)
+        finalValueName = Utility::WStringToString(static_cast<LPCWSTR>(lpValueName));
+    else
+        finalValueName = static_cast<LPCSTR>(lpValueName) ? static_cast<LPCSTR>(lpValueName) : "";
+
+    std::ostringstream ss;
+    ss << GetTrackStr("REGISTRY WRITE")
+        << " | " << (HookMethods::Registry::Write::WriteEnabled ? "ALLOWED" : "BLOCKED")
+        << "\n    Time    : " << Utility::GetTimestamp()
+        << "\n    API        : " << (isWide ? "RegSetValueExW" : "RegSetValueExA")
+        << "\n    Key        : " << Utility::Registry::GetKeyNameFromHandle(hKey)
+        << "\n    Value      : " << finalValueName
+        << "\n    Type       : " << Utility::Registry::DecodeRegType(dwType)
+        << "\n    Data Size  : " << cbData
+        << "\n    Result     : " << (result == ERROR_SUCCESS ? "SUCCESS" : "FAILED(" + std::to_string(result) + ")");
     return ss.str();
 }

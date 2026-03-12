@@ -111,6 +111,10 @@ DWORD WINAPI PipeServer::ReaderThread(LPVOID param)
         entry->messages.push_back(msg);
     }
 
+    if (entry->active) {
+        entry->disconnected = true;
+    }
+
     DisconnectNamedPipe(entry->hPipe);
     return 0;
 }
@@ -141,6 +145,14 @@ std::vector<std::string> PipeServer::DrainMessages(DWORD pid)
     std::vector<std::string> out = std::move(entry->messages);
     entry->messages.clear();
     return out;
+}
+
+bool PipeServer::IsDisconnected(DWORD pid)
+{
+    std::lock_guard<std::mutex> lk(s_mapMutex);
+    auto it = s_pipes.find(pid);
+    if (it == s_pipes.end()) return false;
+    return it->second->disconnected.load();
 }
 
 void PipeServer::Cleanup(DWORD pid)

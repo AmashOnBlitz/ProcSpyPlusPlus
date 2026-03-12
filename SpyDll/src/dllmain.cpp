@@ -46,7 +46,6 @@ std::string GetSysTime() {
 }
 
 DWORD WINAPI MainThread(LPVOID) {
-    //InitDebugConsole();
     CreateThread(nullptr, 0, MessageThread, nullptr, 0, nullptr);
     std::string msg = "Dll injected in " + GetProcessName() + " at " + GetSysTime();
     messenger::PutMessage(msg);

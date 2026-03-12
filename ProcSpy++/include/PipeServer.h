@@ -11,6 +11,7 @@ struct PipeEntry {
     HANDLE              hThread = nullptr;
     HANDLE              hReadEvent = nullptr;
     std::atomic<bool>   active{ false };
+    std::atomic<bool>   disconnected{ false }; 
     std::mutex          msgMutex;
     std::vector<std::string> messages;
     std::mutex          writeMutex;
@@ -25,6 +26,7 @@ public:
     static bool StartListening(DWORD pid);
     static bool SendCommand(DWORD pid, const std::string& cmd);
     static std::vector<std::string> DrainMessages(DWORD pid);
+    static bool IsDisconnected(DWORD pid);
     static void Cleanup(DWORD pid);
 
 private:

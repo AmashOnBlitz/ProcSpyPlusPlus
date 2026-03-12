@@ -18,11 +18,20 @@ struct FailedEntry { DWORD pid; std::string name; };
 struct TrackingState { bool track = false; bool block = false; };
 
 static const char* g_trackingLabels[] = {
-    "Registry Read",  "Registry Write",   "File Create",
-    "File Read",      "File Write",        "Network Send",
-    "Network Receive","Thread Create",     "Memory Alloc",
-    "DLL Load",       "Clipboard Access",  "Screenshot Capture",
-    "Message Box Create",
+    "Registry Read",
+    "Registry Write",
+    "File Create",
+    "File Read",
+    "File Write",
+    "Network Send",
+    "Network Receive",
+    "Thread Create",
+    "Memory Alloc",
+    "DLL Load",
+    "Clipboard Access",
+    "Screenshot Capture",
+    "Generic Message Box Create",
+    "Generic Dialog Box Create"
 };
 static constexpr int g_trackingCount =
 (int)(sizeof(g_trackingLabels) / sizeof(g_trackingLabels[0]));
@@ -76,9 +85,11 @@ static ImVec4 GetLogAccent(const std::string& msg) {
     const bool err = msg.find("[INTERNAL ERROR]") != std::string::npos;
     if (sys)  return ImVec4(0.18f, 0.85f, 0.65f, 1.0f);
     if (err)  return ImVec4(0.92f, 0.28f, 0.28f, 1.0f);
-
+    
     if (msg.find("FILE WRITE") != std::string::npos) return ImVec4(0.95f, 0.58f, 0.18f, 1.0f);
+    if (msg.find("FILE DELETE") != std::string::npos) return ImVec4(0.90f, 0.25f, 0.25f, 1.0f);
     if (msg.find("FILE CREATE") != std::string::npos) return ImVec4(0.98f, 0.85f, 0.22f, 1.0f);
+    if (msg.find("FILE OPEN") != std::string::npos) return ImVec4(0.45f, 0.75f, 0.95f, 1.0f);
     if (msg.find("FILE READ") != std::string::npos) return ImVec4(0.38f, 0.70f, 0.98f, 1.0f);
     if (msg.find("REGISTRY") != std::string::npos) return ImVec4(0.74f, 0.46f, 0.96f, 1.0f);
     if (msg.find("NETWORK") != std::string::npos) return ImVec4(0.20f, 0.80f, 0.96f, 1.0f);
@@ -758,6 +769,33 @@ void Render(ImGuiWindowFlags flags) {
                 log.push_back(MakeLogEntry(m));
             if (log.size() > 5000)
                 log.erase(log.begin(), log.begin() + (int)(log.size() - 500));
+        }
+    }
+
+    {
+        std::vector<DWORD> dead;
+        for (auto& inj : g_injectedList) {
+            if (PipeServer::IsDisconnected(inj.pid)) {
+                dead.push_back(inj.pid);
+                std::string note = "[System] Connection lost \xe2\x80\x94 ";
+                note += inj.name;
+                note += " (PID ";
+                note += std::to_string(inj.pid);
+                note += ") has exited";
+                g_activityLog[inj.pid].push_back(MakeLogEntry(note));
+            }
+        }
+        for (DWORD pid : dead) {
+            PipeServer::Cleanup(pid);
+            g_trackingStates.erase(pid);
+            auto it = std::find_if(g_injectedList.begin(), g_injectedList.end(),
+                                   [pid](const InjectedEntry& e) { return e.pid == pid; });
+            if (it != g_injectedList.end()) {
+                int idx = (int)(it - g_injectedList.begin());
+                if (g_injectedSelectedIdx == idx)     g_injectedSelectedIdx = -1;
+                else if (g_injectedSelectedIdx > idx)     g_injectedSelectedIdx--;
+                g_injectedList.erase(it);
+            }
         }
     }
 

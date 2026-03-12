@@ -56,6 +56,7 @@ namespace HookMethods {
         namespace Read {
             inline std::atomic<bool> ReadEnabled = true;
             inline std::atomic<bool> DebugEnabled = false;
+
             typedef BOOL(WINAPI* ReadFile_t)(
                 HANDLE,
                 LPVOID,
@@ -63,17 +64,32 @@ namespace HookMethods {
                 LPDWORD,
                 LPOVERLAPPED
                 );
+            typedef BOOL(WINAPI* ReadFileEx_t)(
+                HANDLE,
+                LPVOID,
+                DWORD,
+                LPOVERLAPPED,
+                LPOVERLAPPED_COMPLETION_ROUTINE
+                );
 
-            inline ReadFile_t OriginalReadFile = nullptr;
+            inline ReadFile_t   OriginalReadFile = nullptr;
+            inline ReadFileEx_t OriginalReadFileEx = nullptr;
 
             BOOL WINAPI ReadFileHook(
                 HANDLE hFile,
-                LPVOID buffer,
-                DWORD bytesToRead,
-                LPDWORD bytesRead,
-                LPOVERLAPPED overlapped
+                LPVOID lpBuffer,
+                DWORD nNumberOfBytesToRead,
+                LPDWORD lpNumberOfBytesRead,
+                LPOVERLAPPED lpOverlapped
             );
-        }// !Read
+            BOOL WINAPI ReadFileExHook(
+                HANDLE hFile,
+                LPVOID lpBuffer,
+                DWORD nNumberOfBytesToRead,
+                LPOVERLAPPED lpOverlapped,
+                LPOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine
+            );
+        } // !Read
         namespace Write {
             inline std::atomic<bool> WriteEnabled = true;
             inline std::atomic<bool> DebugEnabled = false;
@@ -84,8 +100,17 @@ namespace HookMethods {
                 DWORD,
                 LPDWORD,
                 LPOVERLAPPED
-            );
-            inline WriteFile_t OriginalWriteFile = nullptr;
+                );
+            typedef BOOL(WINAPI* WriteFileEx_t)(
+                HANDLE,
+                LPCVOID,
+                DWORD,
+                LPOVERLAPPED,
+                LPOVERLAPPED_COMPLETION_ROUTINE
+                );
+
+            inline WriteFile_t   OriginalWriteFile = nullptr;
+            inline WriteFileEx_t OriginalWriteFileEx = nullptr;
 
             BOOL WINAPI WriteFileHook(
                 HANDLE       hFile,
@@ -93,6 +118,13 @@ namespace HookMethods {
                 DWORD        nNumberOfBytesToWrite,
                 LPDWORD      lpNumberOfBytesWritten,
                 LPOVERLAPPED lpOverlapped
+            );
+            BOOL WINAPI WriteFileExHook(
+                HANDLE       hFile,
+                LPCVOID      lpBuffer,
+                DWORD        nNumberOfBytesToWrite,
+                LPOVERLAPPED lpOverlapped,
+                LPOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine
             );
         } // !Write
     } // !File
@@ -107,7 +139,6 @@ namespace HookMethods {
             LPCSTR,
             UINT
             );
-
         typedef int (WINAPI* MessageBoxW_t)(
             HWND,
             LPCWSTR,
@@ -124,17 +155,99 @@ namespace HookMethods {
             LPCSTR caption,
             UINT type
         );
-
         int WINAPI MessageBoxWHook(
             HWND hWnd,
             LPCWSTR text,
             LPCWSTR caption,
             UINT type
         );
-
     }; // !MsgBox
 
+    namespace Registry {
+        namespace Read {
+            inline std::atomic<bool> ReadEnabled = true;
+            inline std::atomic<bool> DebugEnabled = false;
 
+            typedef LONG(WINAPI* RegQueryValueExA_t)(
+                HKEY,
+                LPCSTR,
+                LPDWORD,
+                LPDWORD,
+                LPBYTE,
+                LPDWORD
+                );
+            typedef LONG(WINAPI* RegQueryValueExW_t)(
+                HKEY,
+                LPCWSTR,
+                LPDWORD,
+                LPDWORD,
+                LPBYTE,
+                LPDWORD
+                );
+
+            inline RegQueryValueExA_t OriginalRegQueryValueExA = nullptr;
+            inline RegQueryValueExW_t OriginalRegQueryValueExW = nullptr;
+
+            LONG WINAPI RegQueryValueExAHook(
+                HKEY    hKey,
+                LPCSTR  lpValueName,
+                LPDWORD lpReserved,
+                LPDWORD lpType,
+                LPBYTE  lpData,
+                LPDWORD lpcbData
+            );
+            LONG WINAPI RegQueryValueExWHook(
+                HKEY    hKey,
+                LPCWSTR lpValueName,
+                LPDWORD lpReserved,
+                LPDWORD lpType,
+                LPBYTE  lpData,
+                LPDWORD lpcbData
+            );
+        } // !Read
+
+        namespace Write {
+            inline std::atomic<bool> WriteEnabled = true;
+            inline std::atomic<bool> DebugEnabled = false;
+
+            typedef LONG(WINAPI* RegSetValueExA_t)(
+                HKEY,
+                LPCSTR,
+                DWORD,
+                DWORD,
+                const BYTE*,
+                DWORD
+                );
+            typedef LONG(WINAPI* RegSetValueExW_t)(
+                HKEY,
+                LPCWSTR,
+                DWORD,
+                DWORD,
+                const BYTE*,
+                DWORD
+                );
+
+            inline RegSetValueExA_t OriginalRegSetValueExA = nullptr;
+            inline RegSetValueExW_t OriginalRegSetValueExW = nullptr;
+
+            LONG WINAPI RegSetValueExAHook(
+                HKEY        hKey,
+                LPCSTR      lpValueName,
+                DWORD       Reserved,
+                DWORD       dwType,
+                const BYTE* lpData,
+                DWORD       cbData
+            );
+            LONG WINAPI RegSetValueExWHook(
+                HKEY        hKey,
+                LPCWSTR     lpValueName,
+                DWORD       Reserved,
+                DWORD       dwType,
+                const BYTE* lpData,
+                DWORD       cbData
+            );
+        } // !Write
+    } // !Registry
 
     namespace Utility {
         std::string DecodeAccess(DWORD access);
@@ -142,6 +255,7 @@ namespace HookMethods {
         std::string WStringToString(LPCWSTR wstr);
         std::string DecodeCreation(DWORD creation);
         std::string DecodeShareMode(DWORD share);
+        std::string DecodeFileIntent(DWORD access, DWORD creation, DWORD flags, bool fileExisted);
         std::string GetTimestamp();
 
         namespace File {
@@ -166,15 +280,32 @@ namespace HookMethods {
                 LPOVERLAPPED overlapped
             );
 
+            std::string getFileReadExDebugString(
+                HANDLE hFile,
+                LPVOID lpBuffer,
+                DWORD nNumberOfBytesToRead,
+                LPOVERLAPPED lpOverlapped,
+                LPOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine
+            );
+
             std::string getFileWriteDebugString(
                 HANDLE hFile,
                 LPCVOID buffer,
                 DWORD bytesToWrite,
                 LPDWORD bytesWritten,
-                LPOVERLAPPED overlapped
+                LPOVERLAPPED overlapped,
+                bool allowed
             );
 
+            std::string getFileWriteExDebugString(
+                HANDLE hFile,
+                LPCVOID lpBuffer,
+                DWORD nNumberOfBytesToWrite,
+                LPOVERLAPPED lpOverlapped,
+                LPOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine
+            );
         }; // !File
+
         namespace MsgBox {
             std::string getMsgBoxDebugString(
                 HWND hWnd,
@@ -183,6 +314,31 @@ namespace HookMethods {
                 UINT type,
                 bool isWide
             );
-        }// !MsgBox
-    }// !Utility
+        } // !MsgBox
+
+        namespace Registry {
+            std::string GetKeyNameFromHandle(HKEY hKey);
+            std::string DecodeRegType(DWORD type);
+
+            std::string getRegReadDebugString(
+                HKEY hKey,
+                const void* lpValueName,
+                LPDWORD lpType,
+                LPBYTE lpData,
+                LPDWORD lpcbData,
+                LONG result,
+                bool isWide
+            );
+
+            std::string getRegWriteDebugString(
+                HKEY hKey,
+                const void* lpValueName,
+                DWORD dwType,
+                const BYTE* lpData,
+                DWORD cbData,
+                LONG result,
+                bool isWide
+            );
+        } // !Registry
+    } // !Utility
 }

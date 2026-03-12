@@ -39,7 +39,7 @@ namespace APIHook {
         {HookID::FileWrite, "File Write", true, false},
         {HookID::NetworkSend, "Network Send", true, false},
         {HookID::NetworkReceive, "Network Receive", true, false},
-        {HookID::MessageBoxCreate, "Message Box Create", true, false},
+        {HookID::MessageBoxCreate, "Generic Message Box Create", true, false},
         {HookID::ThreadCreate, "Thread Create", true, false},
         {HookID::MemoryAlloc, "Memory Alloc", true, false},
         {HookID::DLLLoad, "DLL Load", true, false},

@@ -31,7 +31,7 @@ void fnRefreshHooks()
 		{
 		case APIHook::HookID::FileCreate:
 		{
-			HookFileCreate(APIHookEntry.funcEnabled,APIHookEntry.debug);
+			HookFileCreate(APIHookEntry.funcEnabled, APIHookEntry.debug);
 			break;
 		}
 		case APIHook::HookID::FileRead:
@@ -47,6 +47,16 @@ void fnRefreshHooks()
 		case APIHook::HookID::MessageBoxCreate:
 		{
 			HookMsgBoxCreate(APIHookEntry.funcEnabled, APIHookEntry.debug);
+			break;
+		}
+		case APIHook::HookID::RegistryRead:
+		{
+			HookRegistryRead(APIHookEntry.funcEnabled, APIHookEntry.debug);
+			break;
+		}
+		case APIHook::HookID::RegistryWrite:
+		{
+			HookRegistryWrite(APIHookEntry.funcEnabled, APIHookEntry.debug);
 			break;
 		}
 		default:
@@ -88,6 +98,7 @@ void HookFileRead(bool funcEnabled, bool debEnabled)
 	HookMethods::File::Read::DebugEnabled = debEnabled;
 	HookMethods::File::Read::ReadEnabled = funcEnabled;
 	static bool fileReadHooked = false;
+	static bool fileReadExHooked = false;
 	if (!fileReadHooked) {
 		MH_CreateHook(
 			&ReadFile,
@@ -96,14 +107,22 @@ void HookFileRead(bool funcEnabled, bool debEnabled)
 		);
 		fileReadHooked = true;
 	}
+	if (!fileReadExHooked) {
+		MH_CreateHook(
+			&ReadFileEx,
+			&HookMethods::File::Read::ReadFileExHook,
+			reinterpret_cast<void**>(&HookMethods::File::Read::OriginalReadFileEx)
+		);
+		fileReadExHooked = true;
+	}
 }
 
 void HookFileWrite(bool funcEnabled, bool debEnabled)
 {
 	HookMethods::File::Write::DebugEnabled = debEnabled;
 	HookMethods::File::Write::WriteEnabled = funcEnabled;
-
 	static bool fileWriteHooked = false;
+	static bool fileWriteExHooked = false;
 	if (!fileWriteHooked) {
 		MH_CreateHook(
 			&WriteFile,
@@ -111,6 +130,14 @@ void HookFileWrite(bool funcEnabled, bool debEnabled)
 			reinterpret_cast<void**>(&HookMethods::File::Write::OriginalWriteFile)
 		);
 		fileWriteHooked = true;
+	}
+	if (!fileWriteExHooked) {
+		MH_CreateHook(
+			&WriteFileEx,
+			&HookMethods::File::Write::WriteFileExHook,
+			reinterpret_cast<void**>(&HookMethods::File::Write::OriginalWriteFileEx)
+		);
+		fileWriteExHooked = true;
 	}
 }
 
@@ -131,5 +158,45 @@ void HookMsgBoxCreate(bool funcEnabled, bool debEnabled)
 			reinterpret_cast<void**>(&HookMethods::MsgBox::OriginalMessageBoxA)
 		);
 		msgBoxHooked = true;
+	}
+}
+
+void HookRegistryRead(bool funcEnabled, bool debEnabled)
+{
+	HookMethods::Registry::Read::DebugEnabled = debEnabled;
+	HookMethods::Registry::Read::ReadEnabled = funcEnabled;
+	static bool regReadHooked = false;
+	if (!regReadHooked) {
+		MH_CreateHook(
+			&RegQueryValueExW,
+			&HookMethods::Registry::Read::RegQueryValueExWHook,
+			reinterpret_cast<void**>(&HookMethods::Registry::Read::OriginalRegQueryValueExW)
+		);
+		MH_CreateHook(
+			&RegQueryValueExA,
+			&HookMethods::Registry::Read::RegQueryValueExAHook,
+			reinterpret_cast<void**>(&HookMethods::Registry::Read::OriginalRegQueryValueExA)
+		);
+		regReadHooked = true;
+	}
+}
+
+void HookRegistryWrite(bool funcEnabled, bool debEnabled)
+{
+	HookMethods::Registry::Write::DebugEnabled = debEnabled;
+	HookMethods::Registry::Write::WriteEnabled = funcEnabled;
+	static bool regWriteHooked = false;
+	if (!regWriteHooked) {
+		MH_CreateHook(
+			&RegSetValueExW,
+			&HookMethods::Registry::Write::RegSetValueExWHook,
+			reinterpret_cast<void**>(&HookMethods::Registry::Write::OriginalRegSetValueExW)
+		);
+		MH_CreateHook(
+			&RegSetValueExA,
+			&HookMethods::Registry::Write::RegSetValueExAHook,
+			reinterpret_cast<void**>(&HookMethods::Registry::Write::OriginalRegSetValueExA)
+		);
+		regWriteHooked = true;
 	}
 }

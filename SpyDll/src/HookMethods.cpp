@@ -42,7 +42,6 @@ HANDLE WINAPI HookMethods::File::Creation::CreateFileWHook(
     }
 
     return result;
-
 }
 
 HANDLE WINAPI HookMethods::File::Creation::CreateFileAHook(
@@ -114,28 +113,58 @@ int WINAPI HookMethods::MsgBox::MessageBoxWHook(HWND hWnd, LPCWSTR text, LPCWSTR
 
 BOOL WINAPI HookMethods::File::Read::ReadFileHook(
     HANDLE hFile,
-    LPVOID buffer,
-    DWORD bytesToRead,
-    LPDWORD bytesRead,
-    LPOVERLAPPED overlapped
+    LPVOID lpBuffer,
+    DWORD nNumberOfBytesToRead,
+    LPDWORD lpNumberOfBytesRead,
+    LPOVERLAPPED lpOverlapped
 )
 {
     if (GetFileType(hFile) == FILE_TYPE_PIPE) {
-        return OriginalReadFile(hFile, buffer, bytesToRead, bytesRead, overlapped);
+        return OriginalReadFile(hFile, lpBuffer, nNumberOfBytesToRead, lpNumberOfBytesRead, lpOverlapped);
     }
 
     BOOL result = FALSE;
     if (ReadEnabled) {
-        result = OriginalReadFile(hFile, buffer, bytesToRead, bytesRead, overlapped);
+        result = OriginalReadFile(hFile, lpBuffer, nNumberOfBytesToRead, lpNumberOfBytesRead, lpOverlapped);
     }
     if (DebugEnabled) {
         messenger::PutMessage(
             Utility::File::getFileReadDebugString(
                 hFile,
-                buffer,
-                bytesToRead,
-                bytesRead,
-                overlapped
+                lpBuffer,
+                nNumberOfBytesToRead,
+                lpNumberOfBytesRead,
+                lpOverlapped
+            )
+        );
+    }
+    return result;
+}
+
+BOOL WINAPI HookMethods::File::Read::ReadFileExHook(
+    HANDLE hFile,
+    LPVOID lpBuffer,
+    DWORD nNumberOfBytesToRead,
+    LPOVERLAPPED lpOverlapped,
+    LPOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine
+)
+{
+    if (GetFileType(hFile) == FILE_TYPE_PIPE) {
+        return OriginalReadFileEx(hFile, lpBuffer, nNumberOfBytesToRead, lpOverlapped, lpCompletionRoutine);
+    }
+
+    BOOL result = FALSE;
+    if (ReadEnabled) {
+        result = OriginalReadFileEx(hFile, lpBuffer, nNumberOfBytesToRead, lpOverlapped, lpCompletionRoutine);
+    }
+    if (DebugEnabled) {
+        messenger::PutMessage(
+            Utility::File::getFileReadExDebugString(
+                hFile,
+                lpBuffer,
+                nNumberOfBytesToRead,
+                lpOverlapped,
+                lpCompletionRoutine
             )
         );
     }
@@ -143,10 +172,10 @@ BOOL WINAPI HookMethods::File::Read::ReadFileHook(
 }
 
 BOOL WINAPI HookMethods::File::Write::WriteFileHook(
-    HANDLE hFile,
-    LPCVOID lpBuffer,
-    DWORD nNumberOfBytesToWrite,
-    LPDWORD lpNumberOfBytesWritten,
+    HANDLE       hFile,
+    LPCVOID      lpBuffer,
+    DWORD        nNumberOfBytesToWrite,
+    LPDWORD      lpNumberOfBytesWritten,
     LPOVERLAPPED lpOverlapped
 )
 {
@@ -167,10 +196,160 @@ BOOL WINAPI HookMethods::File::Write::WriteFileHook(
                 lpBuffer,
                 nNumberOfBytesToWrite,
                 lpNumberOfBytesWritten,
-                lpOverlapped
+                lpOverlapped,
+                WriteEnabled
             )
         );
     }
 
+    return result;
+}
+
+BOOL WINAPI HookMethods::File::Write::WriteFileExHook(
+    HANDLE       hFile,
+    LPCVOID      lpBuffer,
+    DWORD        nNumberOfBytesToWrite,
+    LPOVERLAPPED lpOverlapped,
+    LPOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine
+)
+{
+    if (GetFileType(hFile) == FILE_TYPE_PIPE) {
+        return OriginalWriteFileEx(hFile, lpBuffer, nNumberOfBytesToWrite, lpOverlapped, lpCompletionRoutine);
+    }
+
+    BOOL result = FALSE;
+
+    if (WriteEnabled) {
+        result = OriginalWriteFileEx(hFile, lpBuffer, nNumberOfBytesToWrite, lpOverlapped, lpCompletionRoutine);
+    }
+
+    if (DebugEnabled) {
+        messenger::PutMessage(
+            Utility::File::getFileWriteExDebugString(
+                hFile,
+                lpBuffer,
+                nNumberOfBytesToWrite,
+                lpOverlapped,
+                lpCompletionRoutine
+            )
+        );
+    }
+
+    return result;
+}
+
+LONG WINAPI HookMethods::Registry::Read::RegQueryValueExAHook(
+    HKEY    hKey,
+    LPCSTR  lpValueName,
+    LPDWORD lpReserved,
+    LPDWORD lpType,
+    LPBYTE  lpData,
+    LPDWORD lpcbData
+)
+{
+    LONG result = ERROR_ACCESS_DENIED;
+    if (ReadEnabled) {
+        result = OriginalRegQueryValueExA(hKey, lpValueName, lpReserved, lpType, lpData, lpcbData);
+    }
+    if (DebugEnabled) {
+        messenger::PutMessage(
+            Utility::Registry::getRegReadDebugString(
+                hKey,
+                lpValueName,
+                lpType,
+                lpData,
+                lpcbData,
+                result,
+                false
+            )
+        );
+    }
+    return result;
+}
+
+LONG WINAPI HookMethods::Registry::Read::RegQueryValueExWHook(
+    HKEY    hKey,
+    LPCWSTR lpValueName,
+    LPDWORD lpReserved,
+    LPDWORD lpType,
+    LPBYTE  lpData,
+    LPDWORD lpcbData
+)
+{
+    LONG result = ERROR_ACCESS_DENIED;
+    if (ReadEnabled) {
+        result = OriginalRegQueryValueExW(hKey, lpValueName, lpReserved, lpType, lpData, lpcbData);
+    }
+    if (DebugEnabled) {
+        messenger::PutMessage(
+            Utility::Registry::getRegReadDebugString(
+                hKey,
+                lpValueName,
+                lpType,
+                lpData,
+                lpcbData,
+                result,
+                true
+            )
+        );
+    }
+    return result;
+}
+
+LONG WINAPI HookMethods::Registry::Write::RegSetValueExAHook(
+    HKEY        hKey,
+    LPCSTR      lpValueName,
+    DWORD       Reserved,
+    DWORD       dwType,
+    const BYTE* lpData,
+    DWORD       cbData
+)
+{
+    LONG result = ERROR_ACCESS_DENIED;
+    if (WriteEnabled) {
+        result = OriginalRegSetValueExA(hKey, lpValueName, Reserved, dwType, lpData, cbData);
+    }
+    if (DebugEnabled) {
+        messenger::PutMessage(
+            Utility::Registry::getRegWriteDebugString(
+                hKey,
+                lpValueName,
+                dwType,
+                lpData,
+                cbData,
+                result,
+                false
+            )
+        );
+    }
+    return result;
+}
+
+LONG WINAPI HookMethods::Registry::Write::RegSetValueExWHook(
+    HKEY        hKey,
+    LPCWSTR     lpValueName,
+    DWORD       Reserved,
+    DWORD       dwType,
+    const BYTE* lpData,
+    DWORD       cbData
+)
+{
+    LONG result = ERROR_ACCESS_DENIED;
+    if (WriteEnabled) {
+        result = OriginalRegSetValueExW(hKey, lpValueName, Reserved, dwType, lpData, cbData);
+    }
+    if (DebugEnabled) {
+        messenger::PutMessage(
+            Utility::Registry::getRegWriteDebugString(
+                hKey,
+                lpValueName,
+                dwType,
+                lpData,
+                cbData,
+                result,
+                true
+            )
+        );
+    }
     return result;
 }
