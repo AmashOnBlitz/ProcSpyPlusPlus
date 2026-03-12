@@ -510,3 +510,243 @@ LONG WINAPI HookMethods::Registry::Write::RegSetValueExWHook(
     }
     return result;
 }
+
+static std::string DecodeAllocType(DWORD type)
+{
+    std::string out;
+    if (type & MEM_COMMIT)      out += "COMMIT|";
+    if (type & MEM_RESERVE)     out += "RESERVE|";
+    if (type & MEM_RESET)       out += "RESET|";
+    if (type & MEM_RESET_UNDO)  out += "RESET_UNDO|";
+    if (type & MEM_LARGE_PAGES) out += "LARGE_PAGES|";
+    if (type & MEM_PHYSICAL)    out += "PHYSICAL|";
+    if (type & MEM_TOP_DOWN)    out += "TOP_DOWN|";
+    if (!out.empty()) out.pop_back();
+    return out.empty() ? "NONE" : out;
+}
+
+static std::string DecodeFreeType(DWORD type)
+{
+    if (type & MEM_RELEASE)   return "RELEASE";
+    if (type & MEM_DECOMMIT)  return "DECOMMIT";
+    if (type & MEM_COALESCE_PLACEHOLDERS) return "COALESCE_PLACEHOLDERS";
+    if (type & MEM_PRESERVE_PLACEHOLDER)  return "PRESERVE_PLACEHOLDER";
+    return "UNKNOWN(" + std::to_string(type) + ")";
+}
+
+static std::string DecodeProtect(DWORD protect)
+{
+    std::string base;
+    switch (protect & 0xFF) {
+    case PAGE_NOACCESS:          base = "NOACCESS";          break;
+    case PAGE_READONLY:          base = "READONLY";          break;
+    case PAGE_READWRITE:         base = "READWRITE";         break;
+    case PAGE_WRITECOPY:         base = "WRITECOPY";         break;
+    case PAGE_EXECUTE:           base = "EXECUTE";           break;
+    case PAGE_EXECUTE_READ:      base = "EXECUTE_READ";      break;
+    case PAGE_EXECUTE_READWRITE: base = "EXECUTE_READWRITE"; break;
+    case PAGE_EXECUTE_WRITECOPY: base = "EXECUTE_WRITECOPY"; break;
+    default:                     base = "UNKNOWN(" + std::to_string(protect & 0xFF) + ")"; break;
+    }
+    if (protect & PAGE_GUARD)        base += "|GUARD";
+    if (protect & PAGE_NOCACHE)      base += "|NOCACHE";
+    if (protect & PAGE_WRITECOMBINE) base += "|WRITECOMBINE";
+    return base;
+}
+
+static std::string DecodeHeapFlags(DWORD flags)
+{
+    if (flags == 0) return "NONE";
+    std::string out;
+    if (flags & HEAP_NO_SERIALIZE)              out += "NO_SERIALIZE|";
+    if (flags & HEAP_ZERO_MEMORY)               out += "ZERO_MEMORY|";
+    if (flags & HEAP_GENERATE_EXCEPTIONS)       out += "GENERATE_EXCEPTIONS|";
+    if (flags & HEAP_REALLOC_IN_PLACE_ONLY)     out += "IN_PLACE_ONLY|";
+    if (!out.empty()) out.pop_back();
+    return out.empty() ? "NONE" : out;
+}
+
+LPVOID WINAPI HookMethods::Memory::Alloc::VirtualAllocHook(
+    LPVOID lpAddress,
+    SIZE_T dwSize,
+    DWORD  flAllocationType,
+    DWORD  flProtect
+)
+{
+    LPVOID result = nullptr;
+    if (AllocEnabled) {
+        result = originalVirtualAlloc(lpAddress, dwSize, flAllocationType, flProtect);
+    }
+    if (DebugEnabled) {
+        std::ostringstream ss;
+        ss << GetTrackStr("MEMORY ALLOC")
+            << " | " << (AllocEnabled ? "ALLOWED" : "BLOCKED")
+            << "\n    Time    : " << Utility::GetTimestamp()
+            << "\n    API     : VirtualAlloc"
+            << "\n    Address : " << lpAddress
+            << "\n    Size    : " << dwSize
+            << "\n    Type    : " << DecodeAllocType(flAllocationType)
+            << "\n    Protect : " << DecodeProtect(flProtect)
+            << "\n    Result  : " << result;
+        messenger::PutMessage(ss.str());
+    }
+    return result;
+}
+
+LPVOID WINAPI HookMethods::Memory::Alloc::VirtualAllocExHook(
+    HANDLE hProcess,
+    LPVOID lpAddress,
+    SIZE_T dwSize,
+    DWORD  flAllocationType,
+    DWORD  flProtect
+)
+{
+    LPVOID result = nullptr;
+    if (AllocEnabled) {
+        result = originalVirtualAllocEx(hProcess, lpAddress, dwSize, flAllocationType, flProtect);
+    }
+    if (DebugEnabled) {
+        std::ostringstream ss;
+        ss << GetTrackStr("MEMORY ALLOC EX")
+            << " | " << (AllocEnabled ? "ALLOWED" : "BLOCKED")
+            << "\n    Time    : " << Utility::GetTimestamp()
+            << "\n    API     : VirtualAllocEx"
+            << "\n    Process : " << hProcess
+            << "\n    Address : " << lpAddress
+            << "\n    Size    : " << dwSize
+            << "\n    Type    : " << DecodeAllocType(flAllocationType)
+            << "\n    Protect : " << DecodeProtect(flProtect)
+            << "\n    Result  : " << result;
+        messenger::PutMessage(ss.str());
+    }
+    return result;
+}
+
+LPVOID WINAPI HookMethods::Memory::Alloc::HeapAllocHook(
+    HANDLE hHeap,
+    DWORD  dwFlags,
+    SIZE_T dwBytes
+)
+{
+    LPVOID result = nullptr;
+    if (AllocEnabled) {
+        result = originalHeapAlloc(hHeap, dwFlags, dwBytes);
+    }
+    if (DebugEnabled) {
+        std::ostringstream ss;
+        ss << GetTrackStr("HEAP ALLOC")
+            << " | " << (AllocEnabled ? "ALLOWED" : "BLOCKED")
+            << "\n    Time    : " << Utility::GetTimestamp()
+            << "\n    API     : HeapAlloc"
+            << "\n    Heap    : " << hHeap
+            << "\n    Flags   : " << DecodeHeapFlags(dwFlags)
+            << "\n    Size    : " << dwBytes
+            << "\n    Result  : " << result;
+        messenger::PutMessage(ss.str());
+    }
+    return result;
+}
+
+LPVOID WINAPI HookMethods::Memory::Alloc::HeapReAllocHook(
+    HANDLE hHeap,
+    DWORD  dwFlags,
+    LPVOID lpMem,
+    SIZE_T dwBytes
+)
+{
+    LPVOID result = nullptr;
+    if (AllocEnabled) {
+        result = originalHeapReAlloc(hHeap, dwFlags, lpMem, dwBytes);
+    }
+    if (DebugEnabled) {
+        std::ostringstream ss;
+        ss << GetTrackStr("HEAP REALLOC")
+            << " | " << (AllocEnabled ? "ALLOWED" : "BLOCKED")
+            << "\n    Time    : " << Utility::GetTimestamp()
+            << "\n    API     : HeapReAlloc"
+            << "\n    Heap    : " << hHeap
+            << "\n    Flags   : " << DecodeHeapFlags(dwFlags)
+            << "\n    OldPtr  : " << lpMem
+            << "\n    Size    : " << dwBytes
+            << "\n    Result  : " << result;
+        messenger::PutMessage(ss.str());
+    }
+    return result;
+}
+
+BOOL WINAPI HookMethods::Memory::Free::VirtualFreeHook(
+    LPVOID lpAddress,
+    SIZE_T dwSize,
+    DWORD  dwFreeType
+)
+{
+    BOOL result = FALSE;
+    if (FreeEnabled) {
+        result = originalVirtualFree(lpAddress, dwSize, dwFreeType);
+    }
+    if (DebugEnabled) {
+        std::ostringstream ss;
+        ss << GetTrackStr("MEMORY FREE")
+            << " | " << (FreeEnabled ? "ALLOWED" : "BLOCKED")
+            << "\n    Time    : " << Utility::GetTimestamp()
+            << "\n    API     : VirtualFree"
+            << "\n    Address : " << lpAddress
+            << "\n    Size    : " << dwSize
+            << "\n    Type    : " << DecodeFreeType(dwFreeType)
+            << "\n    Result  : " << (result ? "SUCCESS" : "FAILED");
+        messenger::PutMessage(ss.str());
+    }
+    return result;
+}
+
+BOOL WINAPI HookMethods::Memory::Free::VirtualFreeExHook(
+    HANDLE hProcess,
+    LPVOID lpAddress,
+    SIZE_T dwSize,
+    DWORD  dwFreeType
+)
+{
+    BOOL result = FALSE;
+    if (FreeEnabled) {
+        result = originalVirtualFreeEx(hProcess, lpAddress, dwSize, dwFreeType);
+    }
+    if (DebugEnabled) {
+        std::ostringstream ss;
+        ss << GetTrackStr("MEMORY FREE EX")
+            << " | " << (FreeEnabled ? "ALLOWED" : "BLOCKED")
+            << "\n    Time    : " << Utility::GetTimestamp()
+            << "\n    API     : VirtualFreeEx"
+            << "\n    Process : " << hProcess
+            << "\n    Address : " << lpAddress
+            << "\n    Size    : " << dwSize
+            << "\n    Type    : " << DecodeFreeType(dwFreeType)
+            << "\n    Result  : " << (result ? "SUCCESS" : "FAILED");
+        messenger::PutMessage(ss.str());
+    }
+    return result;
+}
+
+BOOL WINAPI HookMethods::Memory::Free::HeapFreeHook(
+    HANDLE hHeap,
+    DWORD  dwFlags,
+    LPVOID lpMem
+)
+{
+    BOOL result = FALSE;
+    if (FreeEnabled) {
+        result = originalHeapFree(hHeap, dwFlags, lpMem);
+    }
+    if (DebugEnabled) {
+        std::ostringstream ss;
+        ss << GetTrackStr("HEAP FREE")
+            << " | " << (FreeEnabled ? "ALLOWED" : "BLOCKED")
+            << "\n    Time    : " << Utility::GetTimestamp()
+            << "\n    API     : HeapFree"
+            << "\n    Heap    : " << hHeap
+            << "\n    Flags   : " << DecodeHeapFlags(dwFlags)
+            << "\n    Ptr     : " << lpMem
+            << "\n    Result  : " << (result ? "SUCCESS" : "FAILED");
+        messenger::PutMessage(ss.str());
+    }
+    return result;
+}

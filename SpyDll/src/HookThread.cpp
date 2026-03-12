@@ -64,6 +64,16 @@ void fnRefreshHooks()
 			HookRegistryWrite(APIHookEntry.funcEnabled, APIHookEntry.debug);
 			break;
 		}
+		case APIHook::HookID::MemoryAlloc:
+		{
+			HookMemAlloc(APIHookEntry.funcEnabled, APIHookEntry.debug);
+			break;
+		}
+		case APIHook::HookID::MemoryFree:
+		{
+			HookMemFree(APIHookEntry.funcEnabled, APIHookEntry.debug);
+				break;
+		}
 		default:
 			break;
 		}
@@ -265,5 +275,60 @@ void HookRegistryWrite(bool funcEnabled, bool debEnabled)
 			reinterpret_cast<void**>(&HookMethods::Registry::Write::OriginalRegSetValueExA)
 		);
 		regWriteHooked = true;
+	}
+}
+
+void HookMemAlloc(bool funcEnabled, bool debEnabled)
+{
+	HookMethods::Memory::Alloc::AllocEnabled = funcEnabled;
+	HookMethods::Memory::Alloc::DebugEnabled = debEnabled;
+	static bool memAllocHooked = false;
+	if (!memAllocHooked) {
+		MH_CreateHook(
+			&VirtualAlloc,
+			&HookMethods::Memory::Alloc::VirtualAllocHook,
+			reinterpret_cast<void**>(&HookMethods::Memory::Alloc::originalVirtualAlloc)
+		);
+		MH_CreateHook(
+			&VirtualAllocEx,
+			&HookMethods::Memory::Alloc::VirtualAllocExHook,
+			reinterpret_cast<void**>(&HookMethods::Memory::Alloc::originalVirtualAllocEx)
+		);
+		MH_CreateHook(
+			&HeapAlloc,
+			&HookMethods::Memory::Alloc::HeapAllocHook,
+			reinterpret_cast<void**>(&HookMethods::Memory::Alloc::originalHeapAlloc)
+		);
+		MH_CreateHook(
+			&HeapReAlloc,
+			&HookMethods::Memory::Alloc::HeapReAllocHook,
+			reinterpret_cast<void**>(&HookMethods::Memory::Alloc::originalHeapReAlloc)
+		);
+		memAllocHooked = true;
+	}
+}
+
+void HookMemFree(bool funcEnabled, bool debEnabled)
+{
+	HookMethods::Memory::Free::FreeEnabled = funcEnabled;
+	HookMethods::Memory::Free::DebugEnabled = debEnabled;
+	static bool memFreeHooked = false;
+	if (!memFreeHooked) {
+		MH_CreateHook(
+			&VirtualFree,
+			&HookMethods::Memory::Free::VirtualFreeHook,
+			reinterpret_cast<void**>(&HookMethods::Memory::Free::originalVirtualFree)
+		);
+		MH_CreateHook(
+			&VirtualFreeEx,
+			&HookMethods::Memory::Free::VirtualFreeExHook,
+			reinterpret_cast<void**>(&HookMethods::Memory::Free::originalVirtualFreeEx)
+		);
+		MH_CreateHook(
+			&HeapFree,
+			&HookMethods::Memory::Free::HeapFreeHook,
+			reinterpret_cast<void**>(&HookMethods::Memory::Free::originalHeapFree)
+		);
+		memFreeHooked = true;
 	}
 }

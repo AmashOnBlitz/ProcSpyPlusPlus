@@ -18,20 +18,21 @@ struct FailedEntry { DWORD pid; std::string name; };
 struct TrackingState { bool track = false; bool block = false; };
 
 static const char* g_trackingLabels[] = {
-    "Registry Read",
-    "Registry Write",
+    "Registry Read", // done
+    "Registry Write", // done
     "File Create", // done
     "File Read", // done
     "File Write", // done
     "Network Send",
     "Network Receive",
     "Thread Create",
-    "Memory Alloc",
+    "Memory Alloc", // done
+    "Memory Free", // done
     "DLL Load",
     "Clipboard Access",
     "Screenshot Capture",
     "Generic Message Box Create",// done
-    "Generic Dialog Box Create" // done
+    "Generic Dialog Box Create", // done
     "Window Create"
 };
 static constexpr int g_trackingCount =

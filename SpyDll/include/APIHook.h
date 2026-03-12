@@ -19,6 +19,7 @@ namespace APIHook {
         GenericDialogCreate,
         ThreadCreate,
         MemoryAlloc,
+        MemoryFree,
         DLLLoad,
         ClipboardAccess,
         ScreenshotCapture
@@ -44,6 +45,7 @@ namespace APIHook {
         {HookID::GenericDialogCreate, "Generic Dialog Box Create", true, false},
         {HookID::ThreadCreate, "Thread Create", true, false},
         {HookID::MemoryAlloc, "Memory Alloc", true, false},
+        {HookID::MemoryFree, "Memory Free", true, false},
         {HookID::DLLLoad, "DLL Load", true, false},
         {HookID::ClipboardAccess, "Clipboard Access", true, false},
         {HookID::ScreenshotCapture, "Screenshot Capture", true, false},

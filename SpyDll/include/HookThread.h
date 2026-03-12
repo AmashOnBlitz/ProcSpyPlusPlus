@@ -14,3 +14,5 @@ void HookMsgBoxCreate(bool funcEnabled, bool debEnabled);
 void HookGenericDialogCreate(bool funcEnabled, bool debEnabled);
 void HookRegistryRead(bool funcEnabled, bool debEnabled);
 void HookRegistryWrite(bool funcEnabled, bool debEnabled);
+void HookMemAlloc(bool funcEnabled, bool debEnabled);
+void HookMemFree(bool funcEnabled, bool debEnabled);

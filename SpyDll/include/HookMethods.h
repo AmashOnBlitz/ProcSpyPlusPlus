@@ -9,6 +9,8 @@ inline std::string GetTrackStr(std::string str) {
 }
 
 namespace HookMethods {
+
+
     namespace File {
         namespace Creation {
             inline std::atomic<bool> CreateEnabled = true;
@@ -265,73 +267,109 @@ namespace HookMethods {
         );
     }; // !Dialog
 
-    namespace Window {
-        inline std::atomic<bool> WindowEnabled = true;
-        inline std::atomic<bool> DebugEnabled = false;
+    namespace Memory {
+        namespace Alloc {
+            inline std::atomic<bool> AllocEnabled = true;
+            inline std::atomic<bool> DebugEnabled = false;
 
-        // CreateWindowA/W are macros that expand to CreateWindowExA/W with dwExStyle=0,
-        // so hooking the Ex variants covers all four call paths.
-        typedef HWND(WINAPI* CreateWindowExA_t)(
-            DWORD,
-            LPCSTR,
-            LPCSTR,
-            DWORD,
-            int,
-            int,
-            int,
-            int,
-            HWND,
-            HMENU,
-            HINSTANCE,
-            LPVOID
+            typedef LPVOID(WINAPI* VirtualAlloc_t)(
+                LPVOID,
+                SIZE_T,
+                DWORD,
+                DWORD
+                );
+            typedef LPVOID(WINAPI* VirtualAllocEx_t)(
+                HANDLE,
+                LPVOID,
+                SIZE_T,
+                DWORD,
+                DWORD
+                );
+            typedef LPVOID(WINAPI* HeapAlloc_t)(
+                HANDLE,
+                DWORD,
+                SIZE_T
+                );
+            typedef LPVOID(WINAPI* HeapReAlloc_t)(
+                HANDLE,
+                DWORD,
+                LPVOID,
+                SIZE_T
+                );
+            inline VirtualAlloc_t originalVirtualAlloc = nullptr;
+            inline VirtualAllocEx_t originalVirtualAllocEx = nullptr;
+            inline HeapAlloc_t originalHeapAlloc = nullptr;
+            inline HeapReAlloc_t originalHeapReAlloc = nullptr;
+
+            LPVOID WINAPI VirtualAllocHook(
+                LPVOID lpAddress,
+                SIZE_T dwSize,
+                DWORD  flAllocationType,
+                DWORD  flProtect
             );
-        typedef HWND(WINAPI* CreateWindowExW_t)(
-            DWORD,
-            LPCWSTR,
-            LPCWSTR,
-            DWORD,
-            int,
-            int,
-            int,
-            int,
-            HWND,
-            HMENU,
-            HINSTANCE,
-            LPVOID
+            LPVOID WINAPI VirtualAllocExHook(
+                HANDLE hProcess,
+                LPVOID lpAddress,
+                SIZE_T dwSize,
+                DWORD  flAllocationType,
+                DWORD  flProtect
+            );
+            LPVOID WINAPI HeapAllocHook(
+                HANDLE hHeap,
+                DWORD  dwFlags,
+                SIZE_T dwBytes
+            );
+            LPVOID WINAPI HeapReAllocHook(
+                HANDLE hHeap,
+                DWORD  dwFlags,
+                LPVOID lpMem,
+                SIZE_T dwBytes
             );
 
-        inline CreateWindowExA_t OriginalCreateWindowExA = nullptr;
-        inline CreateWindowExW_t OriginalCreateWindowExW = nullptr;
+        }// !Alloc
+        namespace Free {
+            inline std::atomic<bool> FreeEnabled = true;
+            inline std::atomic<bool> DebugEnabled = false;
 
-        HWND WINAPI CreateWindowExAHook(
-            DWORD     dwExStyle,
-            LPCSTR    lpClassName,
-            LPCSTR    lpWindowName,
-            DWORD     dwStyle,
-            int       X,
-            int       Y,
-            int       nWidth,
-            int       nHeight,
-            HWND      hWndParent,
-            HMENU     hMenu,
-            HINSTANCE hInstance,
-            LPVOID    lpParam
-        );
-        HWND WINAPI CreateWindowExWHook(
-            DWORD     dwExStyle,
-            LPCWSTR   lpClassName,
-            LPCWSTR   lpWindowName,
-            DWORD     dwStyle,
-            int       X,
-            int       Y,
-            int       nWidth,
-            int       nHeight,
-            HWND      hWndParent,
-            HMENU     hMenu,
-            HINSTANCE hInstance,
-            LPVOID    lpParam
-        );
-    }; // !Window
+            typedef BOOL(WINAPI* VirtualFree_t) (
+                LPVOID,
+                SIZE_T,
+                DWORD
+                );
+
+            typedef BOOL(WINAPI* VirtualFreeEx_t)(
+                HANDLE,
+                LPVOID,
+                SIZE_T,
+                DWORD
+                );
+            typedef BOOL(WINAPI* HeapFree_t)(
+                HANDLE,
+                DWORD,
+                LPVOID
+                );
+            inline VirtualFree_t originalVirtualFree = nullptr;
+            inline VirtualFreeEx_t originalVirtualFreeEx = nullptr;
+            inline HeapFree_t originalHeapFree = nullptr;
+
+            BOOL WINAPI VirtualFreeHook(
+                LPVOID lpAddress,
+                SIZE_T dwSize,
+                DWORD  dwFreeType
+            );
+            BOOL WINAPI VirtualFreeExHook(
+                HANDLE hProcess,
+                LPVOID lpAddress,
+                SIZE_T dwSize,
+                DWORD  dwFreeType
+            );
+            BOOL WINAPI HeapFreeHook(
+                HANDLE hHeap,
+                DWORD  dwFlags,
+                LPVOID lpMem
+            );
+        }// !Free
+    } // !Memory
 
     namespace Registry {
         namespace Read {
