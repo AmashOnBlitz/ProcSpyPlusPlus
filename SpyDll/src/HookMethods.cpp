@@ -111,6 +111,163 @@ int WINAPI HookMethods::MsgBox::MessageBoxWHook(HWND hWnd, LPCWSTR text, LPCWSTR
     return result;
 }
 
+INT_PTR WINAPI HookMethods::Dialog::DialogBoxParamAHook(
+    HINSTANCE hInstance,
+    LPCSTR    lpTemplateName,
+    HWND      hWndParent,
+    DLGPROC   lpDialogFunc,
+    LPARAM    dwInitParam
+)
+{
+    INT_PTR result = -1;
+    if (DialogEnabled) {
+        result = OriginalDialogBoxParamA(hInstance, lpTemplateName, hWndParent, lpDialogFunc, dwInitParam);
+    }
+    if (DebugEnabled) {
+        messenger::PutMessage(
+            Utility::Dialog::getDialogBoxParamDebugString(
+                hInstance,
+                lpTemplateName,
+                hWndParent,
+                lpDialogFunc,
+                dwInitParam,
+                false
+            )
+        );
+    }
+    return result;
+}
+
+INT_PTR WINAPI HookMethods::Dialog::DialogBoxParamWHook(
+    HINSTANCE hInstance,
+    LPCWSTR   lpTemplateName,
+    HWND      hWndParent,
+    DLGPROC   lpDialogFunc,
+    LPARAM    dwInitParam
+)
+{
+    INT_PTR result = -1;
+    if (DialogEnabled) {
+        result = OriginalDialogBoxParamW(hInstance, lpTemplateName, hWndParent, lpDialogFunc, dwInitParam);
+    }
+    if (DebugEnabled) {
+        messenger::PutMessage(
+            Utility::Dialog::getDialogBoxParamDebugString(
+                hInstance,
+                lpTemplateName,
+                hWndParent,
+                lpDialogFunc,
+                dwInitParam,
+                true
+            )
+        );
+    }
+    return result;
+}
+
+HWND WINAPI HookMethods::Dialog::CreateDialogParamAHook(
+    HINSTANCE hInstance,
+    LPCSTR    lpTemplateName,
+    HWND      hWndParent,
+    DLGPROC   lpDialogFunc,
+    LPARAM    dwInitParam
+)
+{
+    HWND result = NULL;
+    if (DialogEnabled) {
+        result = OriginalCreateDialogParamA(hInstance, lpTemplateName, hWndParent, lpDialogFunc, dwInitParam);
+    }
+    if (DebugEnabled) {
+        messenger::PutMessage(
+            Utility::Dialog::getCreateDialogParamDebugString(
+                hInstance,
+                lpTemplateName,
+                hWndParent,
+                lpDialogFunc,
+                dwInitParam,
+                false
+            )
+        );
+    }
+    return result;
+}
+
+HWND WINAPI HookMethods::Dialog::CreateDialogParamWHook(
+    HINSTANCE hInstance,
+    LPCWSTR   lpTemplateName,
+    HWND      hWndParent,
+    DLGPROC   lpDialogFunc,
+    LPARAM    dwInitParam
+)
+{
+    HWND result = NULL;
+    if (DialogEnabled) {
+        result = OriginalCreateDialogParamW(hInstance, lpTemplateName, hWndParent, lpDialogFunc, dwInitParam);
+    }
+    if (DebugEnabled) {
+        messenger::PutMessage(
+            Utility::Dialog::getCreateDialogParamDebugString(
+                hInstance,
+                lpTemplateName,
+                hWndParent,
+                lpDialogFunc,
+                dwInitParam,
+                true
+            )
+        );
+    }
+    return result;
+}
+
+HRESULT WINAPI HookMethods::Dialog::TaskDialogHook(
+    HWND                           hwndOwner,
+    HINSTANCE                      hInstance,
+    PCWSTR                         pszWindowTitle,
+    PCWSTR                         pszMainInstruction,
+    PCWSTR                         pszContent,
+    TASKDIALOG_COMMON_BUTTON_FLAGS dwCommonButtons,
+    PCWSTR                         pszIcon,
+    int* pnButton
+)
+{
+    HRESULT result = E_FAIL;
+    if (DialogEnabled) {
+        result = OriginalTaskDialog(hwndOwner, hInstance, pszWindowTitle, pszMainInstruction, pszContent, dwCommonButtons, pszIcon, pnButton);
+    }
+    if (DebugEnabled) {
+        messenger::PutMessage(
+            Utility::Dialog::getTaskDialogDebugString(
+                hwndOwner,
+                pszWindowTitle,
+                pszMainInstruction,
+                pszContent,
+                dwCommonButtons,
+                pszIcon
+            )
+        );
+    }
+    return result;
+}
+
+HRESULT WINAPI HookMethods::Dialog::TaskDialogIndirectHook(
+    const TASKDIALOGCONFIG* pTaskConfig,
+    int* pnButton,
+    int* pnRadioButton,
+    BOOL* pfVerificationFlagChecked
+)
+{
+    HRESULT result = E_FAIL;
+    if (DialogEnabled) {
+        result = OriginalTaskDialogIndirect(pTaskConfig, pnButton, pnRadioButton, pfVerificationFlagChecked);
+    }
+    if (DebugEnabled) {
+        messenger::PutMessage(
+            Utility::Dialog::getTaskDialogIndirectDebugString(pTaskConfig)
+        );
+    }
+    return result;
+}
+
 BOOL WINAPI HookMethods::File::Read::ReadFileHook(
     HANDLE hFile,
     LPVOID lpBuffer,

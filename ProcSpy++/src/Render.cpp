@@ -20,9 +20,9 @@ struct TrackingState { bool track = false; bool block = false; };
 static const char* g_trackingLabels[] = {
     "Registry Read",
     "Registry Write",
-    "File Create",
-    "File Read",
-    "File Write",
+    "File Create", // done
+    "File Read", // done
+    "File Write", // done
     "Network Send",
     "Network Receive",
     "Thread Create",
@@ -30,8 +30,9 @@ static const char* g_trackingLabels[] = {
     "DLL Load",
     "Clipboard Access",
     "Screenshot Capture",
-    "Generic Message Box Create",
-    "Generic Dialog Box Create"
+    "Generic Message Box Create",// done
+    "Generic Dialog Box Create" // done
+    "Window Create"
 };
 static constexpr int g_trackingCount =
 (int)(sizeof(g_trackingLabels) / sizeof(g_trackingLabels[0]));

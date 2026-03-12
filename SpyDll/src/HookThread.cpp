@@ -49,6 +49,11 @@ void fnRefreshHooks()
 			HookMsgBoxCreate(APIHookEntry.funcEnabled, APIHookEntry.debug);
 			break;
 		}
+		case APIHook::HookID::GenericDialogCreate:
+		{
+			HookGenericDialogCreate(APIHookEntry.funcEnabled, APIHookEntry.debug);
+			break;
+		}
 		case APIHook::HookID::RegistryRead:
 		{
 			HookRegistryRead(APIHookEntry.funcEnabled, APIHookEntry.debug);
@@ -158,6 +163,68 @@ void HookMsgBoxCreate(bool funcEnabled, bool debEnabled)
 			reinterpret_cast<void**>(&HookMethods::MsgBox::OriginalMessageBoxA)
 		);
 		msgBoxHooked = true;
+	}
+}
+
+void HookGenericDialogCreate(bool funcEnabled, bool debEnabled)
+{
+	HookMethods::Dialog::DebugEnabled = debEnabled;
+	HookMethods::Dialog::DialogEnabled = funcEnabled;
+	static bool dialogBoxParamHooked = false;
+	static bool createDialogParamHooked = false;
+	static bool taskDialogHooked = false;
+	static bool taskDialogIndirectHooked = false;
+	if (!dialogBoxParamHooked) {
+		MH_CreateHook(
+			&DialogBoxParamW,
+			&HookMethods::Dialog::DialogBoxParamWHook,
+			reinterpret_cast<void**>(&HookMethods::Dialog::OriginalDialogBoxParamW)
+		);
+		MH_CreateHook(
+			&DialogBoxParamA,
+			&HookMethods::Dialog::DialogBoxParamAHook,
+			reinterpret_cast<void**>(&HookMethods::Dialog::OriginalDialogBoxParamA)
+		);
+		dialogBoxParamHooked = true;
+	}
+	if (!createDialogParamHooked) {
+		MH_CreateHook(
+			&CreateDialogParamW,
+			&HookMethods::Dialog::CreateDialogParamWHook,
+			reinterpret_cast<void**>(&HookMethods::Dialog::OriginalCreateDialogParamW)
+		);
+		MH_CreateHook(
+			&CreateDialogParamA,
+			&HookMethods::Dialog::CreateDialogParamAHook,
+			reinterpret_cast<void**>(&HookMethods::Dialog::OriginalCreateDialogParamA)
+		);
+		createDialogParamHooked = true;
+	}
+	static HMODULE hComCtl = NULL;
+	if (!hComCtl) hComCtl = GetModuleHandleA("comctl32.dll");
+	if (!hComCtl) hComCtl = LoadLibraryA("comctl32.dll");
+
+	if (!taskDialogHooked && hComCtl) {
+		void* pTaskDialog = GetProcAddress(hComCtl, "TaskDialog");
+		if (pTaskDialog) {
+			MH_CreateHook(
+				pTaskDialog,
+				&HookMethods::Dialog::TaskDialogHook,
+				reinterpret_cast<void**>(&HookMethods::Dialog::OriginalTaskDialog)
+			);
+			taskDialogHooked = true;
+		}
+	}
+	if (!taskDialogIndirectHooked && hComCtl) {
+		void* pTaskDialogIndirect = GetProcAddress(hComCtl, "TaskDialogIndirect");
+		if (pTaskDialogIndirect) {
+			MH_CreateHook(
+				pTaskDialogIndirect,
+				&HookMethods::Dialog::TaskDialogIndirectHook,
+				reinterpret_cast<void**>(&HookMethods::Dialog::OriginalTaskDialogIndirect)
+			);
+			taskDialogIndirectHooked = true;
+		}
 	}
 }
 

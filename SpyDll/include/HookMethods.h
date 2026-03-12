@@ -163,6 +163,176 @@ namespace HookMethods {
         );
     }; // !MsgBox
 
+    namespace Dialog {
+        inline std::atomic<bool> DialogEnabled = true;
+        inline std::atomic<bool> DebugEnabled = false;
+
+        typedef INT_PTR(WINAPI* DialogBoxParamA_t)(
+            HINSTANCE,
+            LPCSTR,
+            HWND,
+            DLGPROC,
+            LPARAM
+            );
+        typedef INT_PTR(WINAPI* DialogBoxParamW_t)(
+            HINSTANCE,
+            LPCWSTR,
+            HWND,
+            DLGPROC,
+            LPARAM
+            );
+        typedef HWND(WINAPI* CreateDialogParamA_t)(
+            HINSTANCE,
+            LPCSTR,
+            HWND,
+            DLGPROC,
+            LPARAM
+            );
+        typedef HWND(WINAPI* CreateDialogParamW_t)(
+            HINSTANCE,
+            LPCWSTR,
+            HWND,
+            DLGPROC,
+            LPARAM
+            );
+        typedef HRESULT(WINAPI* TaskDialog_t)(
+            HWND,
+            HINSTANCE,
+            PCWSTR,
+            PCWSTR,
+            PCWSTR,
+            TASKDIALOG_COMMON_BUTTON_FLAGS,
+            PCWSTR,
+            int*
+            );
+        typedef HRESULT(WINAPI* TaskDialogIndirect_t)(
+            const TASKDIALOGCONFIG*,
+            int*,
+            int*,
+            BOOL*
+            );
+
+        inline DialogBoxParamA_t    OriginalDialogBoxParamA    = nullptr;
+        inline DialogBoxParamW_t    OriginalDialogBoxParamW    = nullptr;
+        inline CreateDialogParamA_t OriginalCreateDialogParamA = nullptr;
+        inline CreateDialogParamW_t OriginalCreateDialogParamW = nullptr;
+        inline TaskDialog_t         OriginalTaskDialog         = nullptr;
+        inline TaskDialogIndirect_t OriginalTaskDialogIndirect = nullptr;
+
+        INT_PTR WINAPI DialogBoxParamAHook(
+            HINSTANCE hInstance,
+            LPCSTR    lpTemplateName,
+            HWND      hWndParent,
+            DLGPROC   lpDialogFunc,
+            LPARAM    dwInitParam
+        );
+        INT_PTR WINAPI DialogBoxParamWHook(
+            HINSTANCE hInstance,
+            LPCWSTR   lpTemplateName,
+            HWND      hWndParent,
+            DLGPROC   lpDialogFunc,
+            LPARAM    dwInitParam
+        );
+        HWND WINAPI CreateDialogParamAHook(
+            HINSTANCE hInstance,
+            LPCSTR    lpTemplateName,
+            HWND      hWndParent,
+            DLGPROC   lpDialogFunc,
+            LPARAM    dwInitParam
+        );
+        HWND WINAPI CreateDialogParamWHook(
+            HINSTANCE hInstance,
+            LPCWSTR   lpTemplateName,
+            HWND      hWndParent,
+            DLGPROC   lpDialogFunc,
+            LPARAM    dwInitParam
+        );
+        HRESULT WINAPI TaskDialogHook(
+            HWND                           hwndOwner,
+            HINSTANCE                      hInstance,
+            PCWSTR                         pszWindowTitle,
+            PCWSTR                         pszMainInstruction,
+            PCWSTR                         pszContent,
+            TASKDIALOG_COMMON_BUTTON_FLAGS dwCommonButtons,
+            PCWSTR                         pszIcon,
+            int*                           pnButton
+        );
+        HRESULT WINAPI TaskDialogIndirectHook(
+            const TASKDIALOGCONFIG* pTaskConfig,
+            int*                    pnButton,
+            int*                    pnRadioButton,
+            BOOL*                   pfVerificationFlagChecked
+        );
+    }; // !Dialog
+
+    namespace Window {
+        inline std::atomic<bool> WindowEnabled = true;
+        inline std::atomic<bool> DebugEnabled = false;
+
+        // CreateWindowA/W are macros that expand to CreateWindowExA/W with dwExStyle=0,
+        // so hooking the Ex variants covers all four call paths.
+        typedef HWND(WINAPI* CreateWindowExA_t)(
+            DWORD,
+            LPCSTR,
+            LPCSTR,
+            DWORD,
+            int,
+            int,
+            int,
+            int,
+            HWND,
+            HMENU,
+            HINSTANCE,
+            LPVOID
+            );
+        typedef HWND(WINAPI* CreateWindowExW_t)(
+            DWORD,
+            LPCWSTR,
+            LPCWSTR,
+            DWORD,
+            int,
+            int,
+            int,
+            int,
+            HWND,
+            HMENU,
+            HINSTANCE,
+            LPVOID
+            );
+
+        inline CreateWindowExA_t OriginalCreateWindowExA = nullptr;
+        inline CreateWindowExW_t OriginalCreateWindowExW = nullptr;
+
+        HWND WINAPI CreateWindowExAHook(
+            DWORD     dwExStyle,
+            LPCSTR    lpClassName,
+            LPCSTR    lpWindowName,
+            DWORD     dwStyle,
+            int       X,
+            int       Y,
+            int       nWidth,
+            int       nHeight,
+            HWND      hWndParent,
+            HMENU     hMenu,
+            HINSTANCE hInstance,
+            LPVOID    lpParam
+        );
+        HWND WINAPI CreateWindowExWHook(
+            DWORD     dwExStyle,
+            LPCWSTR   lpClassName,
+            LPCWSTR   lpWindowName,
+            DWORD     dwStyle,
+            int       X,
+            int       Y,
+            int       nWidth,
+            int       nHeight,
+            HWND      hWndParent,
+            HMENU     hMenu,
+            HINSTANCE hInstance,
+            LPVOID    lpParam
+        );
+    }; // !Window
+
     namespace Registry {
         namespace Read {
             inline std::atomic<bool> ReadEnabled = true;
@@ -315,6 +485,58 @@ namespace HookMethods {
                 bool isWide
             );
         } // !MsgBox
+
+        namespace Dialog {
+            std::string getDialogBoxParamDebugString(
+                HINSTANCE   hInstance,
+                const void* lpTemplateName,
+                HWND        hWndParent,
+                DLGPROC     lpDialogFunc,
+                LPARAM      dwInitParam,
+                bool        isWide
+            );
+            std::string getCreateDialogParamDebugString(
+                HINSTANCE   hInstance,
+                const void* lpTemplateName,
+                HWND        hWndParent,
+                DLGPROC     lpDialogFunc,
+                LPARAM      dwInitParam,
+                bool        isWide
+            );
+            std::string getTaskDialogDebugString(
+                HWND                           hwndOwner,
+                PCWSTR                         pszWindowTitle,
+                PCWSTR                         pszMainInstruction,
+                PCWSTR                         pszContent,
+                TASKDIALOG_COMMON_BUTTON_FLAGS dwCommonButtons,
+                PCWSTR                         pszIcon
+            );
+            std::string getTaskDialogIndirectDebugString(
+                const TASKDIALOGCONFIG* pTaskConfig
+            );
+        } // !Dialog
+
+        namespace Window {
+            std::string DecodeWindowStyle(DWORD dwStyle);
+            std::string DecodeWindowExStyle(DWORD dwExStyle);
+
+            std::string getCreateWindowExDebugString(
+                DWORD       dwExStyle,
+                const void* lpClassName,
+                const void* lpWindowName,
+                DWORD       dwStyle,
+                int         X,
+                int         Y,
+                int         nWidth,
+                int         nHeight,
+                HWND        hWndParent,
+                HMENU       hMenu,
+                HINSTANCE   hInstance,
+                LPVOID      lpParam,
+                HWND        result,
+                bool        isWide
+            );
+        } // !Window
 
         namespace Registry {
             std::string GetKeyNameFromHandle(HKEY hKey);

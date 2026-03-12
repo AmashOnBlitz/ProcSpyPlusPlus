@@ -13,6 +13,8 @@
 #include <iostream>
 #include <iomanip>
 #include <sstream>
+#include <CommCtrl.h>
+#include <winternl.h>
 #include "MinHook.h"
 
 #endif //PCH_H

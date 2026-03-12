@@ -262,3 +262,130 @@ std::string HookMethods::Utility::Registry::getRegWriteDebugString(
         << "\n    Result     : " << (result == ERROR_SUCCESS ? "SUCCESS" : "FAILED(" + std::to_string(result) + ")");
     return ss.str();
 }
+
+static std::string DecodeTemplateNameA(LPCSTR lpTemplateName)
+{
+    if (!lpTemplateName) return "NULL";
+    if (IS_INTRESOURCE(lpTemplateName))
+        return "ID:" + std::to_string(reinterpret_cast<WORD>(lpTemplateName));
+    return std::string(lpTemplateName);
+}
+
+static std::string DecodeTemplateNameW(LPCWSTR lpTemplateName)
+{
+    if (!lpTemplateName) return "NULL";
+    if (IS_INTRESOURCE(lpTemplateName))
+        return "ID:" + std::to_string(reinterpret_cast<WORD>(lpTemplateName));
+    return HookMethods::Utility::WStringToString(lpTemplateName);
+}
+
+std::string HookMethods::Utility::Dialog::getDialogBoxParamDebugString(
+    HINSTANCE   hInstance,
+    const void* lpTemplateName,
+    HWND        hWndParent,
+    DLGPROC     lpDialogFunc,
+    LPARAM      dwInitParam,
+    bool        isWide
+)
+{
+    std::string finalTemplate = isWide
+        ? DecodeTemplateNameW(static_cast<LPCWSTR>(lpTemplateName))
+        : DecodeTemplateNameA(static_cast<LPCSTR>(lpTemplateName));
+
+    std::ostringstream ss;
+    ss << GetTrackStr("DIALOG BOX")
+        << " | " << (HookMethods::Dialog::DialogEnabled ? "ALLOWED" : "BLOCKED")
+        << "\n    Time     : " << Utility::GetTimestamp()
+        << "\n    API      : " << (isWide ? "DialogBoxParamW" : "DialogBoxParamA")
+        << "\n    Template : " << finalTemplate
+        << "\n    Parent   : " << reinterpret_cast<uintptr_t>(hWndParent)
+        << "\n    DlgProc  : " << reinterpret_cast<uintptr_t>(lpDialogFunc)
+        << "\n    InitParam: " << dwInitParam
+        << "\n    Mode     : Modal";
+    return ss.str();
+}
+
+std::string HookMethods::Utility::Dialog::getCreateDialogParamDebugString(
+    HINSTANCE   hInstance,
+    const void* lpTemplateName,
+    HWND        hWndParent,
+    DLGPROC     lpDialogFunc,
+    LPARAM      dwInitParam,
+    bool        isWide
+)
+{
+    std::string finalTemplate = isWide
+        ? DecodeTemplateNameW(static_cast<LPCWSTR>(lpTemplateName))
+        : DecodeTemplateNameA(static_cast<LPCSTR>(lpTemplateName));
+
+    std::ostringstream ss;
+    ss << GetTrackStr("DIALOG CREATE")
+        << " | " << (HookMethods::Dialog::DialogEnabled ? "ALLOWED" : "BLOCKED")
+        << "\n    Time     : " << Utility::GetTimestamp()
+        << "\n    API      : " << (isWide ? "CreateDialogParamW" : "CreateDialogParamA")
+        << "\n    Template : " << finalTemplate
+        << "\n    Parent   : " << reinterpret_cast<uintptr_t>(hWndParent)
+        << "\n    DlgProc  : " << reinterpret_cast<uintptr_t>(lpDialogFunc)
+        << "\n    InitParam: " << dwInitParam
+        << "\n    Mode     : Modeless";
+    return ss.str();
+}
+
+std::string HookMethods::Utility::Dialog::getTaskDialogDebugString(
+    HWND                           hwndOwner,
+    PCWSTR                         pszWindowTitle,
+    PCWSTR                         pszMainInstruction,
+    PCWSTR                         pszContent,
+    TASKDIALOG_COMMON_BUTTON_FLAGS dwCommonButtons,
+    PCWSTR                         pszIcon
+)
+{
+    std::string finalTitle = pszWindowTitle ? Utility::WStringToString(pszWindowTitle) : "";
+    std::string finalInstruction = pszMainInstruction ? Utility::WStringToString(pszMainInstruction) : "";
+    std::string finalContent = pszContent ? Utility::WStringToString(pszContent) : "";
+    std::string finalIcon = IS_INTRESOURCE(pszIcon)
+        ? "ID:" + std::to_string(reinterpret_cast<WORD>(pszIcon))
+        : (pszIcon ? Utility::WStringToString(pszIcon) : "NONE");
+
+    std::ostringstream ss;
+    ss << GetTrackStr("TASK DIALOG")
+        << " | " << (HookMethods::Dialog::DialogEnabled ? "ALLOWED" : "BLOCKED")
+        << "\n    Time        : " << Utility::GetTimestamp()
+        << "\n    API         : TaskDialog"
+        << "\n    Owner       : " << reinterpret_cast<uintptr_t>(hwndOwner)
+        << "\n    Title       : " << finalTitle
+        << "\n    Instruction : " << finalInstruction
+        << "\n    Content     : " << finalContent
+        << "\n    Icon        : " << finalIcon
+        << "\n    Buttons     : 0x" << std::hex << dwCommonButtons << std::dec;
+    return ss.str();
+}
+
+std::string HookMethods::Utility::Dialog::getTaskDialogIndirectDebugString(
+    const TASKDIALOGCONFIG* pTaskConfig
+)
+{
+    std::ostringstream ss;
+    ss << GetTrackStr("TASK DIALOG INDIRECT")
+        << " | " << (HookMethods::Dialog::DialogEnabled ? "ALLOWED" : "BLOCKED")
+        << "\n    Time        : " << Utility::GetTimestamp()
+        << "\n    API         : TaskDialogIndirect";
+
+    if (pTaskConfig) {
+        std::string finalTitle = pTaskConfig->pszWindowTitle ? Utility::WStringToString(pTaskConfig->pszWindowTitle) : "";
+        std::string finalInstruction = pTaskConfig->pszMainInstruction ? Utility::WStringToString(pTaskConfig->pszMainInstruction) : "";
+        std::string finalContent = pTaskConfig->pszContent ? Utility::WStringToString(pTaskConfig->pszContent) : "";
+
+        ss << "\n    Owner       : " << reinterpret_cast<uintptr_t>(pTaskConfig->hwndParent)
+            << "\n    Title       : " << finalTitle
+            << "\n    Instruction : " << finalInstruction
+            << "\n    Content     : " << finalContent
+            << "\n    Buttons     : 0x" << std::hex << pTaskConfig->dwCommonButtons << std::dec
+            << "\n    Flags       : 0x" << std::hex << pTaskConfig->dwFlags << std::dec;
+    }
+    else {
+        ss << "\n    Config      : NULL";
+    }
+
+    return ss.str();
+}
