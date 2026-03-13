@@ -389,3 +389,365 @@ std::string HookMethods::Utility::Dialog::getTaskDialogIndirectDebugString(
 
     return ss.str();
 }
+
+std::string HookMethods::Utility::Window::getCreateWindowExDebugString(
+    DWORD       dwExStyle,
+    const void* lpClassName,
+    const void* lpWindowName,
+    DWORD       dwStyle,
+    int         X,
+    int         Y,
+    int         nWidth,
+    int         nHeight,
+    HWND        hWndParent,
+    HMENU       hMenu,
+    HINSTANCE   hInstance,
+    LPVOID      lpParam,
+    HWND        result,
+    bool        isWide
+)
+{
+    std::string finalClass;
+    std::string finalTitle;
+
+    if (isWide) {
+        LPCWSTR cls = static_cast<LPCWSTR>(lpClassName);
+        LPCWSTR wnd = static_cast<LPCWSTR>(lpWindowName);
+        if (cls) {
+            if (reinterpret_cast<ULONG_PTR>(cls) <= 0xFFFF)
+                finalClass = "ATOM:" + std::to_string(reinterpret_cast<WORD>(cls));
+            else
+                finalClass = Utility::WStringToString(cls);
+        }
+        finalTitle = wnd ? Utility::WStringToString(wnd) : "";
+    }
+    else {
+        LPCSTR cls = static_cast<LPCSTR>(lpClassName);
+        LPCSTR wnd = static_cast<LPCSTR>(lpWindowName);
+        if (cls) {
+            if (reinterpret_cast<ULONG_PTR>(cls) <= 0xFFFF)
+                finalClass = "ATOM:" + std::to_string(reinterpret_cast<WORD>(cls));
+            else
+                finalClass = cls;
+        }
+        finalTitle = wnd ? std::string(wnd) : "";
+    }
+
+    std::ostringstream ss;
+    ss << GetTrackStr("WINDOW CREATE")
+        << " | " << (HookMethods::Window::WindowEnabled ? "ALLOWED" : "BLOCKED")
+        << "\n    Time     : " << Utility::GetTimestamp()
+        << "\n    API      : " << (isWide ? "CreateWindowExW" : "CreateWindowExA")
+        << "\n    Class    : " << finalClass
+        << "\n    Title    : " << finalTitle
+        << "\n    Style    : " << Utility::Window::DecodeWindowStyle(dwStyle)
+        << "\n    ExStyle  : " << Utility::Window::DecodeWindowExStyle(dwExStyle)
+        << "\n    Pos      : (" << X << ", " << Y << ")"
+        << "\n    Size     : " << nWidth << "x" << nHeight
+        << "\n    Parent   : " << reinterpret_cast<uintptr_t>(hWndParent)
+        << "\n    Result   : " << reinterpret_cast<uintptr_t>(result);
+    return ss.str();
+}
+
+std::string HookMethods::Utility::Network::getNetworkSendDebugString(
+    SOCKET s,
+    DWORD  bytesSent,
+    int    flags,
+    int    result,
+    bool   allowed
+)
+{
+    std::ostringstream ss;
+    ss << GetTrackStr("NETWORK SEND")
+        << " | " << (allowed ? "ALLOWED" : "BLOCKED")
+        << "\n    Time    : " << Utility::GetTimestamp()
+        << "\n    API     : send"
+        << "\n    Socket  : " << s
+        << "\n    Flags   : 0x" << std::hex << flags << std::dec
+        << "\n    Sent    : " << bytesSent
+        << "\n    Result  : " << (result != SOCKET_ERROR ? "SUCCESS" : "ERROR");
+    return ss.str();
+}
+
+std::string HookMethods::Utility::Network::getNetworkSendExDebugString(
+    SOCKET s,
+    DWORD  bufferCount,
+    DWORD  bytesSent,
+    DWORD  wsaFlags,
+    bool   async,
+    int    result,
+    bool   allowed
+)
+{
+    std::ostringstream ss;
+    ss << GetTrackStr("NETWORK SEND EX")
+        << " | " << (allowed ? "ALLOWED" : "BLOCKED")
+        << "\n    Time    : " << Utility::GetTimestamp()
+        << "\n    API     : WSASend"
+        << "\n    Socket  : " << s
+        << "\n    Buffers : " << bufferCount
+        << "\n    Flags   : 0x" << std::hex << wsaFlags << std::dec
+        << "\n    Sent    : " << bytesSent
+        << "\n    Mode    : " << (async ? "ASYNC" : "SYNC")
+        << "\n    Result  : " << (result == 0 ? "SUCCESS" : "ERROR");
+    return ss.str();
+}
+
+std::string HookMethods::Utility::Network::getNetworkReceiveDebugString(
+    SOCKET s,
+    DWORD  bytesRecvd,
+    int    flags,
+    int    result,
+    bool   allowed
+)
+{
+    std::ostringstream ss;
+    ss << GetTrackStr("NETWORK RECEIVE")
+        << " | " << (allowed ? "ALLOWED" : "BLOCKED")
+        << "\n    Time    : " << Utility::GetTimestamp()
+        << "\n    API     : recv"
+        << "\n    Socket  : " << s
+        << "\n    Flags   : 0x" << std::hex << flags << std::dec
+        << "\n    Recvd   : " << bytesRecvd
+        << "\n    Result  : " << (result != SOCKET_ERROR ? "SUCCESS" : "ERROR");
+    return ss.str();
+}
+
+std::string HookMethods::Utility::Network::getNetworkReceiveExDebugString(
+    SOCKET s,
+    DWORD  bufferCount,
+    DWORD  bytesRecvd,
+    bool   async,
+    int    result,
+    bool   allowed
+)
+{
+    std::ostringstream ss;
+    ss << GetTrackStr("NETWORK RECEIVE EX")
+        << " | " << (allowed ? "ALLOWED" : "BLOCKED")
+        << "\n    Time    : " << Utility::GetTimestamp()
+        << "\n    API     : WSARecv"
+        << "\n    Socket  : " << s
+        << "\n    Buffers : " << bufferCount
+        << "\n    Recvd   : " << bytesRecvd
+        << "\n    Mode    : " << (async ? "ASYNC" : "SYNC")
+        << "\n    Result  : " << (result == 0 ? "SUCCESS" : "ERROR");
+    return ss.str();
+}
+
+static std::string DecodeCreationFlags(DWORD flags)
+{
+    if (flags == 0) return "NONE";
+    std::string out;
+    if (flags & CREATE_SUSPENDED)          out += "SUSPENDED|";
+    if (flags & STACK_SIZE_PARAM_IS_A_RESERVATION) out += "STACK_RESERVE|";
+    if (!out.empty()) out.pop_back();
+    return out;
+}
+
+std::string HookMethods::Utility::Thread::getCreateThreadDebugString(
+    SIZE_T                dwStackSize,
+    LPTHREAD_START_ROUTINE lpStartAddress,
+    LPVOID                lpParameter,
+    DWORD                 dwCreationFlags,
+    DWORD                 threadId,
+    HANDLE                result
+)
+{
+    std::ostringstream ss;
+    ss << GetTrackStr("THREAD CREATE")
+        << " | " << (HookMethods::Thread::ThreadEnabled ? "ALLOWED" : "BLOCKED")
+        << "\n    Time     : " << Utility::GetTimestamp()
+        << "\n    API      : CreateThread"
+        << "\n    Start    : " << reinterpret_cast<uintptr_t>(lpStartAddress)
+        << "\n    Param    : " << reinterpret_cast<uintptr_t>(lpParameter)
+        << "\n    Stack    : " << dwStackSize
+        << "\n    Flags    : " << DecodeCreationFlags(dwCreationFlags)
+        << "\n    TID      : " << threadId
+        << "\n    Result   : " << (result ? "SUCCESS" : "FAILED");
+    return ss.str();
+}
+
+std::string HookMethods::Utility::Thread::getCreateRemoteThreadExDebugString(
+    HANDLE                hProcess,
+    SIZE_T                dwStackSize,
+    LPTHREAD_START_ROUTINE lpStartAddress,
+    LPVOID                lpParameter,
+    DWORD                 dwCreationFlags,
+    DWORD                 threadId,
+    HANDLE                result
+)
+{
+    std::ostringstream ss;
+    ss << GetTrackStr("THREAD CREATE REMOTE")
+        << " | " << (HookMethods::Thread::ThreadEnabled ? "ALLOWED" : "BLOCKED")
+        << "\n    Time     : " << Utility::GetTimestamp()
+        << "\n    API      : CreateRemoteThreadEx"
+        << "\n    Process  : " << reinterpret_cast<uintptr_t>(hProcess)
+        << "\n    Start    : " << reinterpret_cast<uintptr_t>(lpStartAddress)
+        << "\n    Param    : " << reinterpret_cast<uintptr_t>(lpParameter)
+        << "\n    Stack    : " << dwStackSize
+        << "\n    Flags    : " << DecodeCreationFlags(dwCreationFlags)
+        << "\n    TID      : " << threadId
+        << "\n    Result   : " << (result ? "SUCCESS" : "FAILED");
+    return ss.str();
+}
+
+static std::string DecodeDLLFlags(DWORD flags)
+{
+    if (flags == 0) return "NONE";
+    std::string out;
+    if (flags & DONT_RESOLVE_DLL_REFERENCES)        out += "DONT_RESOLVE|";
+    if (flags & LOAD_LIBRARY_AS_DATAFILE)           out += "AS_DATAFILE|";
+    if (flags & LOAD_LIBRARY_AS_DATAFILE_EXCLUSIVE) out += "AS_DATAFILE_EX|";
+    if (flags & LOAD_LIBRARY_AS_IMAGE_RESOURCE)     out += "AS_IMAGE|";
+    if (flags & LOAD_LIBRARY_SEARCH_APPLICATION_DIR) out += "SEARCH_APPDIR|";
+    if (flags & LOAD_LIBRARY_SEARCH_DEFAULT_DIRS)   out += "SEARCH_DEFAULT|";
+    if (flags & LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR)   out += "SEARCH_DLLDIR|";
+    if (flags & LOAD_LIBRARY_SEARCH_SYSTEM32)        out += "SEARCH_SYS32|";
+    if (flags & LOAD_LIBRARY_SEARCH_USER_DIRS)       out += "SEARCH_USER|";
+    if (!out.empty()) out.pop_back();
+    return out;
+}
+
+std::string HookMethods::Utility::DLL::getDLLLoadDebugString(
+    const void* lpLibFileName,
+    DWORD       dwFlags,
+    HMODULE     result,
+    bool        isWide,
+    bool        isEx
+)
+{
+    std::string finalPath;
+    if (isWide)
+        finalPath = lpLibFileName ? Utility::WStringToString(static_cast<LPCWSTR>(lpLibFileName)) : "";
+    else
+        finalPath = lpLibFileName ? static_cast<LPCSTR>(lpLibFileName) : "";
+
+    std::ostringstream ss;
+    ss << GetTrackStr("DLL LOAD")
+        << " | " << (HookMethods::DLL::DLLEnabled ? "ALLOWED" : "BLOCKED")
+        << "\n    Time    : " << Utility::GetTimestamp()
+        << "\n    API     : " << (isEx ? (isWide ? "LoadLibraryExW" : "LoadLibraryExA")
+                                  : (isWide ? "LoadLibraryW" : "LoadLibraryA"))
+        << "\n    Path    : " << finalPath;
+    if (isEx)
+        ss << "\n    Flags   : " << DecodeDLLFlags(dwFlags);
+    ss << "\n    Result  : " << (result ? "SUCCESS" : "FAILED");
+    return ss.str();
+}
+
+std::string HookMethods::Utility::Clipboard::DecodeClipboardFormat(UINT fmt)
+{
+    switch (fmt) {
+    case CF_TEXT:         return "CF_TEXT";
+    case CF_BITMAP:       return "CF_BITMAP";
+    case CF_METAFILEPICT: return "CF_METAFILEPICT";
+    case CF_SYLK:         return "CF_SYLK";
+    case CF_DIF:          return "CF_DIF";
+    case CF_TIFF:         return "CF_TIFF";
+    case CF_OEMTEXT:      return "CF_OEMTEXT";
+    case CF_DIB:          return "CF_DIB";
+    case CF_PALETTE:      return "CF_PALETTE";
+    case CF_PENDATA:      return "CF_PENDATA";
+    case CF_RIFF:         return "CF_RIFF";
+    case CF_WAVE:         return "CF_WAVE";
+    case CF_UNICODETEXT:  return "CF_UNICODETEXT";
+    case CF_ENHMETAFILE:  return "CF_ENHMETAFILE";
+    case CF_HDROP:        return "CF_HDROP";
+    case CF_LOCALE:       return "CF_LOCALE";
+    case CF_DIBV5:        return "CF_DIBV5";
+    default:              return "CUSTOM(" + std::to_string(fmt) + ")";
+    }
+}
+
+std::string HookMethods::Utility::Clipboard::getOpenClipboardDebugString(HWND hWnd, BOOL result)
+{
+    std::ostringstream ss;
+    ss << GetTrackStr("CLIPBOARD OPEN")
+        << " | " << (HookMethods::Clipboard::ClipboardEnabled ? "ALLOWED" : "BLOCKED")
+        << "\n    Time    : " << Utility::GetTimestamp()
+        << "\n    API     : OpenClipboard"
+        << "\n    HWND    : " << reinterpret_cast<uintptr_t>(hWnd)
+        << "\n    Result  : " << (result ? "SUCCESS" : "FAILED");
+    return ss.str();
+}
+
+std::string HookMethods::Utility::Clipboard::getGetClipboardDataDebugString(UINT uFormat, HANDLE result)
+{
+    std::ostringstream ss;
+    ss << GetTrackStr("CLIPBOARD READ")
+        << " | " << (HookMethods::Clipboard::ClipboardEnabled ? "ALLOWED" : "BLOCKED")
+        << "\n    Time    : " << Utility::GetTimestamp()
+        << "\n    API     : GetClipboardData"
+        << "\n    Format  : " << DecodeClipboardFormat(uFormat)
+        << "\n    Result  : " << (result ? "SUCCESS" : "FAILED");
+    return ss.str();
+}
+
+std::string HookMethods::Utility::Clipboard::getSetClipboardDataDebugString(UINT uFormat, HANDLE hMem, HANDLE result)
+{
+    std::ostringstream ss;
+    ss << GetTrackStr("CLIPBOARD WRITE")
+        << " | " << (HookMethods::Clipboard::ClipboardEnabled ? "ALLOWED" : "BLOCKED")
+        << "\n    Time    : " << Utility::GetTimestamp()
+        << "\n    API     : SetClipboardData"
+        << "\n    Format  : " << DecodeClipboardFormat(uFormat)
+        << "\n    Data    : " << reinterpret_cast<uintptr_t>(hMem)
+        << "\n    Result  : " << (result ? "SUCCESS" : "FAILED");
+    return ss.str();
+}
+
+std::string HookMethods::Utility::Clipboard::getEmptyClipboardDebugString(BOOL result)
+{
+    std::ostringstream ss;
+    ss << GetTrackStr("CLIPBOARD CLEAR")
+        << " | " << (HookMethods::Clipboard::ClipboardEnabled ? "ALLOWED" : "BLOCKED")
+        << "\n    Time    : " << Utility::GetTimestamp()
+        << "\n    API     : EmptyClipboard"
+        << "\n    Result  : " << (result ? "SUCCESS" : "FAILED");
+    return ss.str();
+}
+
+std::string HookMethods::Utility::Screenshot::DecodeBitBltRop(DWORD rop)
+{
+    switch (rop) {
+    case SRCCOPY:    return "SRCCOPY";
+    case SRCPAINT:   return "SRCPAINT";
+    case SRCAND:     return "SRCAND";
+    case SRCERASE:   return "SRCERASE";
+    case SRCINVERT:  return "SRCINVERT";
+    case PATCOPY:    return "PATCOPY";
+    case PATPAINT:   return "PATPAINT";
+    case PATINVERT:  return "PATINVERT";
+    case DSTINVERT:  return "DSTINVERT";
+    case BLACKNESS:  return "BLACKNESS";
+    case WHITENESS:  return "WHITENESS";
+    case CAPTUREBLT: return "CAPTUREBLT";
+    default:         return "0x" + [rop] { std::ostringstream o; o << std::hex << rop; return o.str(); }();
+    }
+}
+
+std::string HookMethods::Utility::Screenshot::getBitBltDebugString(
+    int   xDest,
+    int   yDest,
+    int   nWidth,
+    int   nHeight,
+    int   xSrc,
+    int   ySrc,
+    DWORD rop,
+    BOOL  result
+)
+{
+    std::ostringstream ss;
+    ss << GetTrackStr("SCREENSHOT CAPTURE")
+        << " | " << (HookMethods::Screenshot::ScreenshotEnabled ? "ALLOWED" : "BLOCKED")
+        << "\n    Time    : " << Utility::GetTimestamp()
+        << "\n    API     : BitBlt"
+        << "\n    Dest    : (" << xDest << ", " << yDest << ")"
+        << "\n    Size    : " << nWidth << "x" << nHeight
+        << "\n    Src     : (" << xSrc << ", " << ySrc << ")"
+        << "\n    ROP     : " << DecodeBitBltRop(rop)
+        << "\n    Result  : " << (result ? "SUCCESS" : "FAILED");
+    return ss.str();
+}

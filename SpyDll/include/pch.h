@@ -2,6 +2,8 @@
 #define PCH_H
 
 #define WIN32_LEAN_AND_MEAN 
+#include <winsock2.h>
+#include <winbase.h>
 #include <Windows.h>
 #include <tchar.h>
 #include <strsafe.h>

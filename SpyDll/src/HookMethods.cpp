@@ -511,6 +511,8 @@ LONG WINAPI HookMethods::Registry::Write::RegSetValueExWHook(
     return result;
 }
 
+// DEPRECATED: memory hooks not used - causes deadlock due to re-entrant heap allocations during hook logging
+
 static std::string DecodeAllocType(DWORD type)
 {
     std::string out;
@@ -575,7 +577,7 @@ LPVOID WINAPI HookMethods::Memory::Alloc::VirtualAllocHook(
 {
     LPVOID result = nullptr;
     //if (AllocEnabled) {
-        result = originalVirtualAlloc(lpAddress, dwSize, flAllocationType, flProtect);
+    result = originalVirtualAlloc(lpAddress, dwSize, flAllocationType, flProtect);
     //}
     if (DebugEnabled) {
         std::ostringstream ss;
@@ -603,7 +605,7 @@ LPVOID WINAPI HookMethods::Memory::Alloc::VirtualAllocExHook(
 {
     LPVOID result = nullptr;
     //if (AllocEnabled) {
-        result = originalVirtualAllocEx(hProcess, lpAddress, dwSize, flAllocationType, flProtect);
+    result = originalVirtualAllocEx(hProcess, lpAddress, dwSize, flAllocationType, flProtect);
     //}
     if (DebugEnabled) {
         std::ostringstream ss;
@@ -630,20 +632,21 @@ LPVOID WINAPI HookMethods::Memory::Alloc::HeapAllocHook(
 {
     LPVOID result = nullptr;
     //if (AllocEnabled) {
-        result = originalHeapAlloc(hHeap, dwFlags, dwBytes);
+    result = originalHeapAlloc(hHeap, dwFlags, dwBytes);
     //}
-    if (DebugEnabled) {
-        std::ostringstream ss;
-        ss << GetTrackStr("HEAP ALLOC")
-            << " | " << (AllocEnabled ? "ALLOWED" : "BLOCKED")
-            << "\n    Time    : " << Utility::GetTimestamp()
-            << "\n    API     : HeapAlloc"
-            << "\n    Heap    : " << hHeap
-            << "\n    Flags   : " << DecodeHeapFlags(dwFlags)
-            << "\n    Size    : " << dwBytes
-            << "\n    Result  : " << result;
-        messenger::PutMessage(ss.str());
-    }
+    if (MessagePipelineAllocMem)
+        if (DebugEnabled) {
+            std::ostringstream ss;
+            ss << GetTrackStr("HEAP ALLOC")
+                << " | " << (AllocEnabled ? "ALLOWED" : "BLOCKED")
+                << "\n    Time    : " << Utility::GetTimestamp()
+                << "\n    API     : HeapAlloc"
+                << "\n    Heap    : " << hHeap
+                << "\n    Flags   : " << DecodeHeapFlags(dwFlags)
+                << "\n    Size    : " << dwBytes
+                << "\n    Result  : " << result;
+            messenger::PutMessage(ss.str());
+        }
     return result;
 }
 
@@ -656,7 +659,7 @@ LPVOID WINAPI HookMethods::Memory::Alloc::HeapReAllocHook(
 {
     LPVOID result = nullptr;
     //if (AllocEnabled) {
-        result = originalHeapReAlloc(hHeap, dwFlags, lpMem, dwBytes);
+    result = originalHeapReAlloc(hHeap, dwFlags, lpMem, dwBytes);
     //}
     if (DebugEnabled) {
         std::ostringstream ss;
@@ -682,7 +685,7 @@ BOOL WINAPI HookMethods::Memory::Free::VirtualFreeHook(
 {
     BOOL result = FALSE;
     //if (FreeEnabled) {
-        result = originalVirtualFree(lpAddress, dwSize, dwFreeType);
+    result = originalVirtualFree(lpAddress, dwSize, dwFreeType);
     //}
     if (DebugEnabled) {
         std::ostringstream ss;
@@ -708,7 +711,7 @@ BOOL WINAPI HookMethods::Memory::Free::VirtualFreeExHook(
 {
     BOOL result = FALSE;
     //if (FreeEnabled) {
-        result = originalVirtualFreeEx(hProcess, lpAddress, dwSize, dwFreeType);
+    result = originalVirtualFreeEx(hProcess, lpAddress, dwSize, dwFreeType);
     //}
     if (DebugEnabled) {
         std::ostringstream ss;
@@ -734,7 +737,7 @@ BOOL WINAPI HookMethods::Memory::Free::HeapFreeHook(
 {
     BOOL result = FALSE;
     //if (FreeEnabled) {
-        result = originalHeapFree(hHeap, dwFlags, lpMem);
+    result = originalHeapFree(hHeap, dwFlags, lpMem);
     //}
     if (DebugEnabled) {
         std::ostringstream ss;
@@ -747,6 +750,368 @@ BOOL WINAPI HookMethods::Memory::Free::HeapFreeHook(
             << "\n    Ptr     : " << lpMem
             << "\n    Result  : " << (result ? "SUCCESS" : "FAILED");
         messenger::PutMessage(ss.str());
+    }
+    return result;
+}
+
+int WINAPI HookMethods::Network::Send::sendHook(SOCKET s, const char* buf, int len, int flags)
+{
+    int result = SOCKET_ERROR;
+    if (SendEnabled) {
+        result = OriginalSend(s, buf, len, flags);
+    }
+    if (DebugEnabled) {
+        messenger::PutMessage(
+            Utility::Network::getNetworkSendDebugString(
+                s,
+                result >= 0 ? (DWORD)result : 0,
+                flags,
+                result,
+                (bool)SendEnabled
+            )
+        );
+    }
+    return result;
+}
+
+int WINAPI HookMethods::Network::Send::WSASendHook(
+    SOCKET s,
+    LPWSABUF lpBuffers,
+    DWORD dwBufferCount,
+    LPDWORD lpNumberOfBytesSent,
+    DWORD dwFlags,
+    LPWSAOVERLAPPED lpOverlapped,
+    LPWSAOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine
+)
+{
+    int result = SOCKET_ERROR;
+    if (SendEnabled) {
+        result = OriginalWSASend(s, lpBuffers, dwBufferCount, lpNumberOfBytesSent, dwFlags, lpOverlapped, lpCompletionRoutine);
+    }
+    if (DebugEnabled) {
+        DWORD sent = (result == 0 && lpNumberOfBytesSent) ? *lpNumberOfBytesSent : 0;
+        messenger::PutMessage(
+            Utility::Network::getNetworkSendExDebugString(
+                s,
+                dwBufferCount,
+                sent,
+                dwFlags,
+                lpOverlapped != nullptr,
+                result,
+                (bool)SendEnabled
+            )
+        );
+    }
+    return result;
+}
+
+int WINAPI HookMethods::Network::Receive::recvHook(SOCKET s, char* buf, int len, int flags)
+{
+    int result = SOCKET_ERROR;
+    if (ReceiveEnabled) {
+        result = OriginalRecv(s, buf, len, flags);
+    }
+    if (DebugEnabled) {
+        messenger::PutMessage(
+            Utility::Network::getNetworkReceiveDebugString(
+                s,
+                result >= 0 ? (DWORD)result : 0,
+                flags,
+                result,
+                (bool)ReceiveEnabled
+            )
+        );
+    }
+    return result;
+}
+
+int WINAPI HookMethods::Network::Receive::WSARecvHook(
+    SOCKET s,
+    LPWSABUF lpBuffers,
+    DWORD dwBufferCount,
+    LPDWORD lpNumberOfBytesRecvd,
+    LPDWORD lpFlags,
+    LPWSAOVERLAPPED lpOverlapped,
+    LPWSAOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine
+)
+{
+    int result = SOCKET_ERROR;
+    if (ReceiveEnabled) {
+        result = OriginalWSARecv(s, lpBuffers, dwBufferCount, lpNumberOfBytesRecvd, lpFlags, lpOverlapped, lpCompletionRoutine);
+    }
+    if (DebugEnabled) {
+        DWORD recvd = (result == 0 && lpNumberOfBytesRecvd) ? *lpNumberOfBytesRecvd : 0;
+        messenger::PutMessage(
+            Utility::Network::getNetworkReceiveExDebugString(
+                s,
+                dwBufferCount,
+                recvd,
+                lpOverlapped != nullptr,
+                result,
+                (bool)ReceiveEnabled
+            )
+        );
+    }
+    return result;
+}
+
+HANDLE WINAPI HookMethods::Thread::CreateThreadHook(
+    LPSECURITY_ATTRIBUTES lpThreadAttributes,
+    SIZE_T                dwStackSize,
+    LPTHREAD_START_ROUTINE lpStartAddress,
+    LPVOID                lpParameter,
+    DWORD                 dwCreationFlags,
+    LPDWORD               lpThreadId
+)
+{
+    HANDLE result = NULL;
+    if (ThreadEnabled) {
+        result = OriginalCreateThread(lpThreadAttributes, dwStackSize, lpStartAddress, lpParameter, dwCreationFlags, lpThreadId);
+    }
+    if (DebugEnabled) {
+        DWORD tid = (result && lpThreadId) ? *lpThreadId : 0;
+        messenger::PutMessage(
+            Utility::Thread::getCreateThreadDebugString(
+                dwStackSize,
+                lpStartAddress,
+                lpParameter,
+                dwCreationFlags,
+                tid,
+                result
+            )
+        );
+    }
+    return result;
+}
+
+HANDLE WINAPI HookMethods::Thread::CreateRemoteThreadExHook(
+    HANDLE                       hProcess,
+    LPSECURITY_ATTRIBUTES        lpThreadAttributes,
+    SIZE_T                       dwStackSize,
+    LPTHREAD_START_ROUTINE       lpStartAddress,
+    LPVOID                       lpParameter,
+    DWORD                        dwCreationFlags,
+    LPPROC_THREAD_ATTRIBUTE_LIST lpAttributeList,
+    LPDWORD                      lpThreadId
+)
+{
+    HANDLE result = NULL;
+    if (ThreadEnabled) {
+        result = OriginalCreateRemoteThreadEx(hProcess, lpThreadAttributes, dwStackSize, lpStartAddress, lpParameter, dwCreationFlags, lpAttributeList, lpThreadId);
+    }
+    if (DebugEnabled) {
+        DWORD tid = (result && lpThreadId) ? *lpThreadId : 0;
+        messenger::PutMessage(
+            Utility::Thread::getCreateRemoteThreadExDebugString(
+                hProcess,
+                dwStackSize,
+                lpStartAddress,
+                lpParameter,
+                dwCreationFlags,
+                tid,
+                result
+            )
+        );
+    }
+    return result;
+}
+
+HMODULE WINAPI HookMethods::DLL::LoadLibraryAHook(LPCSTR lpLibFileName)
+{
+    HMODULE result = NULL;
+    if (DLLEnabled) {
+        result = OriginalLoadLibraryA(lpLibFileName);
+    }
+    if (DebugEnabled) {
+        messenger::PutMessage(
+            Utility::DLL::getDLLLoadDebugString(lpLibFileName, 0, result, false, false)
+        );
+    }
+    return result;
+}
+
+HMODULE WINAPI HookMethods::DLL::LoadLibraryWHook(LPCWSTR lpLibFileName)
+{
+    HMODULE result = NULL;
+    if (DLLEnabled) {
+        result = OriginalLoadLibraryW(lpLibFileName);
+    }
+    if (DebugEnabled) {
+        messenger::PutMessage(
+            Utility::DLL::getDLLLoadDebugString(lpLibFileName, 0, result, true, false)
+        );
+    }
+    return result;
+}
+
+HMODULE WINAPI HookMethods::DLL::LoadLibraryExAHook(LPCSTR lpLibFileName, HANDLE hFile, DWORD dwFlags)
+{
+    HMODULE result = NULL;
+    if (DLLEnabled) {
+        result = OriginalLoadLibraryExA(lpLibFileName, hFile, dwFlags);
+    }
+    if (DebugEnabled) {
+        messenger::PutMessage(
+            Utility::DLL::getDLLLoadDebugString(lpLibFileName, dwFlags, result, false, true)
+        );
+    }
+    return result;
+}
+
+HMODULE WINAPI HookMethods::DLL::LoadLibraryExWHook(LPCWSTR lpLibFileName, HANDLE hFile, DWORD dwFlags)
+{
+    HMODULE result = NULL;
+    if (DLLEnabled) {
+        result = OriginalLoadLibraryExW(lpLibFileName, hFile, dwFlags);
+    }
+    if (DebugEnabled) {
+        messenger::PutMessage(
+            Utility::DLL::getDLLLoadDebugString(lpLibFileName, dwFlags, result, true, true)
+        );
+    }
+    return result;
+}
+
+BOOL WINAPI HookMethods::Clipboard::OpenClipboardHook(HWND hWndNewOwner)
+{
+    BOOL result = FALSE;
+    if (ClipboardEnabled) {
+        result = OriginalOpenClipboard(hWndNewOwner);
+    }
+    if (DebugEnabled) {
+        messenger::PutMessage(
+            Utility::Clipboard::getOpenClipboardDebugString(hWndNewOwner, result)
+        );
+    }
+    return result;
+}
+
+HANDLE WINAPI HookMethods::Clipboard::GetClipboardDataHook(UINT uFormat)
+{
+    HANDLE result = NULL;
+    if (ClipboardEnabled) {
+        result = OriginalGetClipboardData(uFormat);
+    }
+    if (DebugEnabled) {
+        messenger::PutMessage(
+            Utility::Clipboard::getGetClipboardDataDebugString(uFormat, result)
+        );
+    }
+    return result;
+}
+
+HANDLE WINAPI HookMethods::Clipboard::SetClipboardDataHook(UINT uFormat, HANDLE hMem)
+{
+    HANDLE result = NULL;
+    if (ClipboardEnabled) {
+        result = OriginalSetClipboardData(uFormat, hMem);
+    }
+    if (DebugEnabled) {
+        messenger::PutMessage(
+            Utility::Clipboard::getSetClipboardDataDebugString(uFormat, hMem, result)
+        );
+    }
+    return result;
+}
+
+BOOL WINAPI HookMethods::Clipboard::EmptyClipboardHook()
+{
+    BOOL result = FALSE;
+    if (ClipboardEnabled) {
+        result = OriginalEmptyClipboard();
+    }
+    if (DebugEnabled) {
+        messenger::PutMessage(
+            Utility::Clipboard::getEmptyClipboardDebugString(result)
+        );
+    }
+    return result;
+}
+
+BOOL WINAPI HookMethods::Screenshot::BitBltHook(
+    HDC  hdcDest,
+    int  x,
+    int  y,
+    int  nWidth,
+    int  nHeight,
+    HDC  hdcSrc,
+    int  x1,
+    int  y1,
+    DWORD rop
+)
+{
+    BOOL result = FALSE;
+    if (ScreenshotEnabled) {
+        result = OriginalBitBlt(hdcDest, x, y, nWidth, nHeight, hdcSrc, x1, y1, rop);
+    }
+    if (DebugEnabled) {
+        messenger::PutMessage(
+            Utility::Screenshot::getBitBltDebugString(x, y, nWidth, nHeight, x1, y1, rop, result)
+        );
+    }
+    return result;
+}
+
+HWND WINAPI HookMethods::Window::CreateWindowExAHook(
+    DWORD     dwExStyle,
+    LPCSTR    lpClassName,
+    LPCSTR    lpWindowName,
+    DWORD     dwStyle,
+    int       X,
+    int       Y,
+    int       nWidth,
+    int       nHeight,
+    HWND      hWndParent,
+    HMENU     hMenu,
+    HINSTANCE hInstance,
+    LPVOID    lpParam
+)
+{
+    HWND result = NULL;
+    if (WindowEnabled) {
+        result = OriginalCreateWindowExA(dwExStyle, lpClassName, lpWindowName, dwStyle, X, Y, nWidth, nHeight, hWndParent, hMenu, hInstance, lpParam);
+    }
+    if (DebugEnabled) {
+        messenger::PutMessage(
+            Utility::Window::getCreateWindowExDebugString(
+                dwExStyle, lpClassName, lpWindowName, dwStyle,
+                X, Y, nWidth, nHeight,
+                hWndParent, hMenu, hInstance, lpParam,
+                result, false
+            )
+        );
+    }
+    return result;
+}
+
+HWND WINAPI HookMethods::Window::CreateWindowExWHook(
+    DWORD     dwExStyle,
+    LPCWSTR   lpClassName,
+    LPCWSTR   lpWindowName,
+    DWORD     dwStyle,
+    int       X,
+    int       Y,
+    int       nWidth,
+    int       nHeight,
+    HWND      hWndParent,
+    HMENU     hMenu,
+    HINSTANCE hInstance,
+    LPVOID    lpParam
+)
+{
+    HWND result = NULL;
+    if (WindowEnabled) {
+        result = OriginalCreateWindowExW(dwExStyle, lpClassName, lpWindowName, dwStyle, X, Y, nWidth, nHeight, hWndParent, hMenu, hInstance, lpParam);
+    }
+    if (DebugEnabled) {
+        messenger::PutMessage(
+            Utility::Window::getCreateWindowExDebugString(
+                dwExStyle, lpClassName, lpWindowName, dwStyle,
+                X, Y, nWidth, nHeight,
+                hWndParent, hMenu, hInstance, lpParam,
+                result, true
+            )
+        );
     }
     return result;
 }

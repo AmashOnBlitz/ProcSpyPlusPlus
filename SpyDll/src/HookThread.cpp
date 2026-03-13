@@ -64,15 +64,40 @@ void fnRefreshHooks()
 			HookRegistryWrite(APIHookEntry.funcEnabled, APIHookEntry.debug);
 			break;
 		}
-		case APIHook::HookID::MemoryAlloc:
+		case APIHook::HookID::NetworkSend:
 		{
-			HookMemAlloc(APIHookEntry.funcEnabled, APIHookEntry.debug);
+			HookNetworkSend(APIHookEntry.funcEnabled, APIHookEntry.debug);
 			break;
 		}
-		case APIHook::HookID::MemoryFree:
+		case APIHook::HookID::NetworkReceive:
 		{
-			HookMemFree(APIHookEntry.funcEnabled, APIHookEntry.debug);
-				break;
+			HookNetworkReceive(APIHookEntry.funcEnabled, APIHookEntry.debug);
+			break;
+		}
+		case APIHook::HookID::ThreadCreate:
+		{
+			HookThreadCreate(APIHookEntry.funcEnabled, APIHookEntry.debug);
+			break;
+		}
+		case APIHook::HookID::DLLLoad:
+		{
+			HookDLLLoad(APIHookEntry.funcEnabled, APIHookEntry.debug);
+			break;
+		}
+		case APIHook::HookID::ClipboardAccess:
+		{
+			HookClipboard(APIHookEntry.funcEnabled, APIHookEntry.debug);
+			break;
+		}
+		case APIHook::HookID::ScreenshotCapture:
+		{
+			HookScreenshot(APIHookEntry.funcEnabled, APIHookEntry.debug);
+			break;
+		}
+		case APIHook::HookID::WindowCreate:
+		{
+			HookWindowCreate(APIHookEntry.funcEnabled, APIHookEntry.debug);
+			break;
 		}
 		default:
 			break;
@@ -278,6 +303,201 @@ void HookRegistryWrite(bool funcEnabled, bool debEnabled)
 	}
 }
 
+void HookNetworkSend(bool funcEnabled, bool debEnabled)
+{
+	HookMethods::Network::Send::SendEnabled = funcEnabled;
+	HookMethods::Network::Send::DebugEnabled = debEnabled;
+	static bool sendHooked = false;
+	static bool wsaSendHooked = false;
+	static HMODULE hWS2 = NULL;
+	if (!hWS2) hWS2 = GetModuleHandleA("ws2_32.dll");
+	if (!hWS2) hWS2 = LoadLibraryA("ws2_32.dll");
+	if (!hWS2) return;
+	if (!sendHooked) {
+		void* pSend = GetProcAddress(hWS2, "send");
+		if (pSend) {
+			MH_CreateHook(
+				pSend,
+				&HookMethods::Network::Send::sendHook,
+				reinterpret_cast<void**>(&HookMethods::Network::Send::OriginalSend)
+			);
+			sendHooked = true;
+		}
+	}
+	if (!wsaSendHooked) {
+		void* pWSASend = GetProcAddress(hWS2, "WSASend");
+		if (pWSASend) {
+			MH_CreateHook(
+				pWSASend,
+				&HookMethods::Network::Send::WSASendHook,
+				reinterpret_cast<void**>(&HookMethods::Network::Send::OriginalWSASend)
+			);
+			wsaSendHooked = true;
+		}
+	}
+}
+
+void HookNetworkReceive(bool funcEnabled, bool debEnabled)
+{
+	HookMethods::Network::Receive::ReceiveEnabled = funcEnabled;
+	HookMethods::Network::Receive::DebugEnabled = debEnabled;
+	static bool recvHooked = false;
+	static bool wsaRecvHooked = false;
+	static HMODULE hWS2 = NULL;
+	if (!hWS2) hWS2 = GetModuleHandleA("ws2_32.dll");
+	if (!hWS2) hWS2 = LoadLibraryA("ws2_32.dll");
+	if (!hWS2) return;
+	if (!recvHooked) {
+		void* pRecv = GetProcAddress(hWS2, "recv");
+		if (pRecv) {
+			MH_CreateHook(
+				pRecv,
+				&HookMethods::Network::Receive::recvHook,
+				reinterpret_cast<void**>(&HookMethods::Network::Receive::OriginalRecv)
+			);
+			recvHooked = true;
+		}
+	}
+	if (!wsaRecvHooked) {
+		void* pWSARecv = GetProcAddress(hWS2, "WSARecv");
+		if (pWSARecv) {
+			MH_CreateHook(
+				pWSARecv,
+				&HookMethods::Network::Receive::WSARecvHook,
+				reinterpret_cast<void**>(&HookMethods::Network::Receive::OriginalWSARecv)
+			);
+			wsaRecvHooked = true;
+		}
+	}
+}
+
+void HookThreadCreate(bool funcEnabled, bool debEnabled)
+{
+	HookMethods::Thread::ThreadEnabled = funcEnabled;
+	HookMethods::Thread::DebugEnabled = debEnabled;
+	static bool createThreadHooked = false;
+	static bool createRemoteThreadExHooked = false;
+	if (!createThreadHooked) {
+		MH_CreateHook(
+			&CreateThread,
+			&HookMethods::Thread::CreateThreadHook,
+			reinterpret_cast<void**>(&HookMethods::Thread::OriginalCreateThread)
+		);
+		createThreadHooked = true;
+	}
+	if (!createRemoteThreadExHooked) {
+		MH_CreateHook(
+			&CreateRemoteThreadEx,
+			&HookMethods::Thread::CreateRemoteThreadExHook,
+			reinterpret_cast<void**>(&HookMethods::Thread::OriginalCreateRemoteThreadEx)
+		);
+		createRemoteThreadExHooked = true;
+	}
+}
+
+void HookDLLLoad(bool funcEnabled, bool debEnabled)
+{
+	HookMethods::DLL::DLLEnabled = funcEnabled;
+	HookMethods::DLL::DebugEnabled = debEnabled;
+	static bool loadLibraryHooked = false;
+	if (!loadLibraryHooked) {
+		MH_CreateHook(
+			&LoadLibraryA,
+			&HookMethods::DLL::LoadLibraryAHook,
+			reinterpret_cast<void**>(&HookMethods::DLL::OriginalLoadLibraryA)
+		);
+		MH_CreateHook(
+			&LoadLibraryW,
+			&HookMethods::DLL::LoadLibraryWHook,
+			reinterpret_cast<void**>(&HookMethods::DLL::OriginalLoadLibraryW)
+		);
+		MH_CreateHook(
+			&LoadLibraryExA,
+			&HookMethods::DLL::LoadLibraryExAHook,
+			reinterpret_cast<void**>(&HookMethods::DLL::OriginalLoadLibraryExA)
+		);
+		MH_CreateHook(
+			&LoadLibraryExW,
+			&HookMethods::DLL::LoadLibraryExWHook,
+			reinterpret_cast<void**>(&HookMethods::DLL::OriginalLoadLibraryExW)
+		);
+		loadLibraryHooked = true;
+	}
+}
+
+void HookClipboard(bool funcEnabled, bool debEnabled)
+{
+	HookMethods::Clipboard::ClipboardEnabled = funcEnabled;
+	HookMethods::Clipboard::DebugEnabled = debEnabled;
+	static bool clipboardHooked = false;
+	if (!clipboardHooked) {
+		MH_CreateHook(
+			&OpenClipboard,
+			&HookMethods::Clipboard::OpenClipboardHook,
+			reinterpret_cast<void**>(&HookMethods::Clipboard::OriginalOpenClipboard)
+		);
+		MH_CreateHook(
+			&GetClipboardData,
+			&HookMethods::Clipboard::GetClipboardDataHook,
+			reinterpret_cast<void**>(&HookMethods::Clipboard::OriginalGetClipboardData)
+		);
+		MH_CreateHook(
+			&SetClipboardData,
+			&HookMethods::Clipboard::SetClipboardDataHook,
+			reinterpret_cast<void**>(&HookMethods::Clipboard::OriginalSetClipboardData)
+		);
+		MH_CreateHook(
+			&EmptyClipboard,
+			&HookMethods::Clipboard::EmptyClipboardHook,
+			reinterpret_cast<void**>(&HookMethods::Clipboard::OriginalEmptyClipboard)
+		);
+		clipboardHooked = true;
+	}
+}
+
+void HookScreenshot(bool funcEnabled, bool debEnabled)
+{
+	HookMethods::Screenshot::ScreenshotEnabled = funcEnabled;
+	HookMethods::Screenshot::DebugEnabled = debEnabled;
+	static bool bitBltHooked = false;
+	static HMODULE hGDI32 = NULL;
+	if (!hGDI32) hGDI32 = GetModuleHandleA("gdi32.dll");
+	if (!hGDI32) hGDI32 = LoadLibraryA("gdi32.dll");
+	if (!hGDI32) return;
+	if (!bitBltHooked) {
+		void* pBitBlt = GetProcAddress(hGDI32, "BitBlt");
+		if (pBitBlt) {
+			MH_CreateHook(
+				pBitBlt,
+				&HookMethods::Screenshot::BitBltHook,
+				reinterpret_cast<void**>(&HookMethods::Screenshot::OriginalBitBlt)
+			);
+			bitBltHooked = true;
+		}
+	}
+}
+
+void HookWindowCreate(bool funcEnabled, bool debEnabled)
+{
+	HookMethods::Window::WindowEnabled = funcEnabled;
+	HookMethods::Window::DebugEnabled = debEnabled;
+	static bool windowCreateHooked = false;
+	if (!windowCreateHooked) {
+		MH_CreateHook(
+			&CreateWindowExW,
+			&HookMethods::Window::CreateWindowExWHook,
+			reinterpret_cast<void**>(&HookMethods::Window::OriginalCreateWindowExW)
+		);
+		MH_CreateHook(
+			&CreateWindowExA,
+			&HookMethods::Window::CreateWindowExAHook,
+			reinterpret_cast<void**>(&HookMethods::Window::OriginalCreateWindowExA)
+		);
+		windowCreateHooked = true;
+	}
+}
+
+// DEPRECATED: not used - causes deadlock due to re-entrant heap allocations during hook logging
 void HookMemAlloc(bool funcEnabled, bool debEnabled)
 {
 	HookMethods::Memory::Alloc::AllocEnabled = funcEnabled;
@@ -308,6 +528,7 @@ void HookMemAlloc(bool funcEnabled, bool debEnabled)
 	}
 }
 
+// DEPRECATED: not used - causes deadlock due to re-entrant heap allocations during hook logging
 void HookMemFree(bool funcEnabled, bool debEnabled)
 {
 	HookMethods::Memory::Free::FreeEnabled = funcEnabled;

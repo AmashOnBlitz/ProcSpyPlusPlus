@@ -18,21 +18,19 @@ struct FailedEntry { DWORD pid; std::string name; };
 struct TrackingState { bool track = false; bool block = false; };
 
 static const char* g_trackingLabels[] = {
-    "Registry Read", // done
-    "Registry Write", // done
-    "File Create", // done
-    "File Read", // done
-    "File Write", // done
+    "Registry Read",
+    "Registry Write",
+    "File Create",
+    "File Read",
+    "File Write",
     "Network Send",
     "Network Receive",
     "Thread Create",
-    "Memory Alloc", // done
-    "Memory Free", // done
     "DLL Load",
     "Clipboard Access",
     "Screenshot Capture",
-    "Generic Message Box Create",// done
-    "Generic Dialog Box Create", // done
+    "Generic Message Box Create",
+    "Generic Dialog Box Create",
     "Window Create"
 };
 static constexpr int g_trackingCount =
@@ -45,14 +43,13 @@ struct TrackingCategory {
 };
 
 static const TrackingCategory g_trackingCategories[] = {
-    { "REGISTRY",  0,  1 },
-    { "FILE",      2,  4 },
-    { "NETWORK",   5,  6 },
-    { "THREAD",    7,  7 },
-    { "MEMORY",    8,  9 },
-    { "DLL",      10, 10 },
-    { "CLIPBOARD / SCREENSHOT", 11, 12 },
-    { "UI",       13, 15 },
+    { "REGISTRY",               0,  1 },
+    { "FILE",                   2,  4 },
+    { "NETWORK",                5,  6 },
+    { "THREAD",                 7,  7 },
+    { "DLL",                    8,  8 },
+    { "CLIPBOARD / SCREENSHOT", 9, 10 },
+    { "UI",                    11, 13 },
 };
 static constexpr int g_categoryCount =
 (int)(sizeof(g_trackingCategories) / sizeof(g_trackingCategories[0]));
@@ -610,7 +607,7 @@ static void RenderTrackingPanel(float width, float height) {
     ImGui::BeginChild("TrackingPanel", ImVec2(width, height), true);
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.18f, 0.85f, 0.65f, 0.7f));
     ImGui::Dummy(ImVec2(0, 2));
-    ImGui::Text("  TRACKING  (T = log  |  B = block  |  memory ops: track only)");
+    ImGui::Text("  TRACKING  (T = Track  |  B = Block)");
     ImGui::PopStyleColor();
     ImGui::Separator(); ImGui::Dummy(ImVec2(0, 3));
 
@@ -665,8 +662,7 @@ static void RenderTrackingPanel(float width, float height) {
             }
             ImGui::PopStyleColor(2);
 
-            const bool supportsBlock = (strcmp(g_trackingLabels[i], "Memory Alloc") != 0 &&
-                                        strcmp(g_trackingLabels[i], "Memory Free") != 0);
+            const bool supportsBlock = true;
             if (supportsBlock) {
                 ImGui::SameLine(0, cbSpacing);
                 bool blockVal = hasState ? states[i].block : false;

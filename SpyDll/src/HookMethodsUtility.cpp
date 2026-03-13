@@ -197,3 +197,49 @@ std::string HookMethods::Utility::Registry::DecodeRegType(DWORD type)
     default:                             return "UNKNOWN(" + std::to_string(type) + ")";
     }
 }
+
+std::string HookMethods::Utility::Window::DecodeWindowStyle(DWORD dwStyle)
+{
+    if (dwStyle == 0) return "NONE";
+    std::string out;
+    if (dwStyle & WS_POPUP)         out += "POPUP|";
+    if (dwStyle & WS_CHILD)         out += "CHILD|";
+    if (dwStyle & WS_MINIMIZE)      out += "MINIMIZE|";
+    if (dwStyle & WS_VISIBLE)       out += "VISIBLE|";
+    if (dwStyle & WS_DISABLED)      out += "DISABLED|";
+    if (dwStyle & WS_CLIPSIBLINGS)  out += "CLIPSIBLINGS|";
+    if (dwStyle & WS_CLIPCHILDREN)  out += "CLIPCHILDREN|";
+    if (dwStyle & WS_MAXIMIZE)      out += "MAXIMIZE|";
+    if ((dwStyle & WS_CAPTION) == WS_CAPTION) out += "CAPTION|";
+    if (dwStyle & WS_VSCROLL)       out += "VSCROLL|";
+    if (dwStyle & WS_HSCROLL)       out += "HSCROLL|";
+    if (dwStyle & WS_SYSMENU)       out += "SYSMENU|";
+    if (dwStyle & WS_THICKFRAME)    out += "THICKFRAME|";
+    if (dwStyle & WS_GROUP)         out += "GROUP|";
+    if (dwStyle & WS_TABSTOP)       out += "TABSTOP|";
+    if (!out.empty()) out.pop_back();
+    return out.empty() ? "NONE" : out;
+}
+
+std::string HookMethods::Utility::Window::DecodeWindowExStyle(DWORD dwExStyle)
+{
+    if (dwExStyle == 0) return "NONE";
+    std::string out;
+    if (dwExStyle & WS_EX_DLGMODALFRAME)   out += "DLGMODALFRAME|";
+    if (dwExStyle & WS_EX_NOPARENTNOTIFY)  out += "NOPARENTNOTIFY|";
+    if (dwExStyle & WS_EX_TOPMOST)         out += "TOPMOST|";
+    if (dwExStyle & WS_EX_ACCEPTFILES)     out += "ACCEPTFILES|";
+    if (dwExStyle & WS_EX_TRANSPARENT)     out += "TRANSPARENT|";
+    if (dwExStyle & WS_EX_TOOLWINDOW)      out += "TOOLWINDOW|";
+    if (dwExStyle & WS_EX_WINDOWEDGE)      out += "WINDOWEDGE|";
+    if (dwExStyle & WS_EX_CLIENTEDGE)      out += "CLIENTEDGE|";
+    if (dwExStyle & WS_EX_CONTEXTHELP)     out += "CONTEXTHELP|";
+    if (dwExStyle & WS_EX_STATICEDGE)      out += "STATICEDGE|";
+    if (dwExStyle & WS_EX_APPWINDOW)       out += "APPWINDOW|";
+    if (dwExStyle & WS_EX_LAYERED)         out += "LAYERED|";
+    if (dwExStyle & WS_EX_CONTROLPARENT)   out += "CONTROLPARENT|";
+    if (dwExStyle & WS_EX_COMPOSITED)      out += "COMPOSITED|";
+    if (dwExStyle & WS_EX_NOACTIVATE)      out += "NOACTIVATE|";
+    if (!out.empty()) out.pop_back();
+    return out.empty() ? "NONE" : out;
+}
