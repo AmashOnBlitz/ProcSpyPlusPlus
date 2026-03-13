@@ -574,9 +574,9 @@ LPVOID WINAPI HookMethods::Memory::Alloc::VirtualAllocHook(
 )
 {
     LPVOID result = nullptr;
-    if (AllocEnabled) {
+    //if (AllocEnabled) {
         result = originalVirtualAlloc(lpAddress, dwSize, flAllocationType, flProtect);
-    }
+    //}
     if (DebugEnabled) {
         std::ostringstream ss;
         ss << GetTrackStr("MEMORY ALLOC")
@@ -602,9 +602,9 @@ LPVOID WINAPI HookMethods::Memory::Alloc::VirtualAllocExHook(
 )
 {
     LPVOID result = nullptr;
-    if (AllocEnabled) {
+    //if (AllocEnabled) {
         result = originalVirtualAllocEx(hProcess, lpAddress, dwSize, flAllocationType, flProtect);
-    }
+    //}
     if (DebugEnabled) {
         std::ostringstream ss;
         ss << GetTrackStr("MEMORY ALLOC EX")
@@ -629,9 +629,9 @@ LPVOID WINAPI HookMethods::Memory::Alloc::HeapAllocHook(
 )
 {
     LPVOID result = nullptr;
-    if (AllocEnabled) {
+    //if (AllocEnabled) {
         result = originalHeapAlloc(hHeap, dwFlags, dwBytes);
-    }
+    //}
     if (DebugEnabled) {
         std::ostringstream ss;
         ss << GetTrackStr("HEAP ALLOC")
@@ -655,9 +655,9 @@ LPVOID WINAPI HookMethods::Memory::Alloc::HeapReAllocHook(
 )
 {
     LPVOID result = nullptr;
-    if (AllocEnabled) {
+    //if (AllocEnabled) {
         result = originalHeapReAlloc(hHeap, dwFlags, lpMem, dwBytes);
-    }
+    //}
     if (DebugEnabled) {
         std::ostringstream ss;
         ss << GetTrackStr("HEAP REALLOC")
@@ -681,9 +681,9 @@ BOOL WINAPI HookMethods::Memory::Free::VirtualFreeHook(
 )
 {
     BOOL result = FALSE;
-    if (FreeEnabled) {
+    //if (FreeEnabled) {
         result = originalVirtualFree(lpAddress, dwSize, dwFreeType);
-    }
+    //}
     if (DebugEnabled) {
         std::ostringstream ss;
         ss << GetTrackStr("MEMORY FREE")
@@ -707,9 +707,9 @@ BOOL WINAPI HookMethods::Memory::Free::VirtualFreeExHook(
 )
 {
     BOOL result = FALSE;
-    if (FreeEnabled) {
+    //if (FreeEnabled) {
         result = originalVirtualFreeEx(hProcess, lpAddress, dwSize, dwFreeType);
-    }
+    //}
     if (DebugEnabled) {
         std::ostringstream ss;
         ss << GetTrackStr("MEMORY FREE EX")
@@ -733,9 +733,9 @@ BOOL WINAPI HookMethods::Memory::Free::HeapFreeHook(
 )
 {
     BOOL result = FALSE;
-    if (FreeEnabled) {
+    //if (FreeEnabled) {
         result = originalHeapFree(hHeap, dwFlags, lpMem);
-    }
+    //}
     if (DebugEnabled) {
         std::ostringstream ss;
         ss << GetTrackStr("HEAP FREE")

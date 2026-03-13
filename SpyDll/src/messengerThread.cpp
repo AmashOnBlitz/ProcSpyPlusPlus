@@ -14,7 +14,7 @@ static std::string GetPipeName() {
 DWORD WINAPI MessageThread(LPVOID) {
     HANDLE hPipe = INVALID_HANDLE_VALUE;
     int failureIteration = 1;
-
+    MessagePipelineAllocMem = true;
     do {
         hPipe = CreateFileA(
             GetPipeName().c_str(),
@@ -35,6 +35,7 @@ DWORD WINAPI MessageThread(LPVOID) {
     DWORD bytesWritten = 0;
 
     while (!ThreadExpectedToStop) {
+        MessagePipelineAllocMem = true;
         while (messenger::readOffSet < messenger::writeOffSet) {
             buff = messenger::ReadMessage();
             if (!buff.empty()) {
@@ -59,10 +60,10 @@ DWORD WINAPI MessageThread(LPVOID) {
                 }
             }
         }
-
+        MessagePipelineAllocMem = false;
         Sleep(20);
     }
-
+    MessagePipelineAllocMem = false;
     CloseHandle(hPipe);
     return 0;
 }

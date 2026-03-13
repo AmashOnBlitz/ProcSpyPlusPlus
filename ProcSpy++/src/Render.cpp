@@ -38,6 +38,25 @@ static const char* g_trackingLabels[] = {
 static constexpr int g_trackingCount =
 (int)(sizeof(g_trackingLabels) / sizeof(g_trackingLabels[0]));
 
+struct TrackingCategory {
+    const char* label;
+    int         startIdx;
+    int         endIdx;
+};
+
+static const TrackingCategory g_trackingCategories[] = {
+    { "REGISTRY",  0,  1 },
+    { "FILE",      2,  4 },
+    { "NETWORK",   5,  6 },
+    { "THREAD",    7,  7 },
+    { "MEMORY",    8,  9 },
+    { "DLL",      10, 10 },
+    { "CLIPBOARD / SCREENSHOT", 11, 12 },
+    { "UI",       13, 15 },
+};
+static constexpr int g_categoryCount =
+(int)(sizeof(g_trackingCategories) / sizeof(g_trackingCategories[0]));
+
 struct LogEntry {
     std::vector<std::string> lines;
     ImVec4  accent;
@@ -87,7 +106,7 @@ static ImVec4 GetLogAccent(const std::string& msg) {
     const bool err = msg.find("[INTERNAL ERROR]") != std::string::npos;
     if (sys)  return ImVec4(0.18f, 0.85f, 0.65f, 1.0f);
     if (err)  return ImVec4(0.92f, 0.28f, 0.28f, 1.0f);
-    
+
     if (msg.find("FILE WRITE") != std::string::npos) return ImVec4(0.95f, 0.58f, 0.18f, 1.0f);
     if (msg.find("FILE DELETE") != std::string::npos) return ImVec4(0.90f, 0.25f, 0.25f, 1.0f);
     if (msg.find("FILE CREATE") != std::string::npos) return ImVec4(0.98f, 0.85f, 0.22f, 1.0f);
@@ -96,7 +115,9 @@ static ImVec4 GetLogAccent(const std::string& msg) {
     if (msg.find("REGISTRY") != std::string::npos) return ImVec4(0.74f, 0.46f, 0.96f, 1.0f);
     if (msg.find("NETWORK") != std::string::npos) return ImVec4(0.20f, 0.80f, 0.96f, 1.0f);
     if (msg.find("MSGBOX") != std::string::npos) return ImVec4(0.96f, 0.50f, 0.74f, 1.0f);
+    if (msg.find("DIALOG") != std::string::npos) return ImVec4(0.96f, 0.50f, 0.74f, 1.0f);
     if (msg.find("THREAD") != std::string::npos) return ImVec4(0.40f, 0.88f, 0.70f, 1.0f);
+    if (msg.find("HEAP") != std::string::npos) return ImVec4(0.50f, 0.90f, 0.40f, 1.0f);
     if (msg.find("MEMORY") != std::string::npos) return ImVec4(0.50f, 0.90f, 0.40f, 1.0f);
     if (msg.find("DLL") != std::string::npos) return ImVec4(0.96f, 0.70f, 0.28f, 1.0f);
     if (msg.find("CLIPBOARD") != std::string::npos) return ImVec4(0.80f, 0.64f, 0.96f, 1.0f);
@@ -559,17 +580,44 @@ static void RenderMenuBar() {
     ImGui::PopStyleVar(3); ImGui::PopStyleColor(5);
 }
 
+static void RenderCategoryHeader(const char* label, bool disabled) {
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    float       winX = ImGui::GetWindowPos().x;
+    float       winW = ImGui::GetWindowSize().x;
+    float       pad = ImGui::GetStyle().WindowPadding.x;
+
+    ImGui::Dummy(ImVec2(0, 3));
+
+    ImGui::PushStyleColor(ImGuiCol_Text,
+                          disabled ? ImVec4(0.28f, 0.32f, 0.38f, 1.0f)
+                          : ImVec4(0.32f, 0.38f, 0.48f, 1.0f));
+    ImGui::SetCursorPosX(pad + 2.0f);
+    ImGui::TextUnformatted(label);
+    ImGui::PopStyleColor();
+
+    float lineY = ImGui::GetCursorScreenPos().y + 1.0f;
+    float lineX0 = winX + pad + 2.0f;
+    float lineX1 = winX + winW - pad - 2.0f;
+    ImU32 lineCol = disabled ? IM_COL32(32, 38, 48, 255)
+        : IM_COL32(40, 50, 65, 255);
+    dl->AddLine(ImVec2(lineX0, lineY), ImVec2(lineX1, lineY), lineCol, 1.0f);
+
+    ImGui::Dummy(ImVec2(0, 3));
+}
+
 static void RenderTrackingPanel(float width, float height) {
     ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.10f, 0.11f, 0.14f, 1.0f));
     ImGui::BeginChild("TrackingPanel", ImVec2(width, height), true);
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.18f, 0.85f, 0.65f, 0.7f));
     ImGui::Dummy(ImVec2(0, 2));
-    ImGui::Text("  TRACKING (T --> Tracking, B --> Block)");
+    ImGui::Text("  TRACKING  (T = log  |  B = block  |  memory ops: track only)");
     ImGui::PopStyleColor();
     ImGui::Separator(); ImGui::Dummy(ImVec2(0, 3));
+
     float availW = ImGui::GetContentRegionAvail().x;
     float colW = availW * 0.5f;
     float cbSpacing = ImGui::GetStyle().ItemSpacing.x;
+
     DWORD          pid = 0;
     TrackingState* states = nullptr;
     bool           hasState = false;
@@ -578,43 +626,74 @@ static void RenderTrackingPanel(float width, float height) {
         auto it = g_trackingStates.find(pid);
         if (it != g_trackingStates.end()) { states = it->second.data(); hasState = true; }
     }
+
     ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.12f, 0.14f, 0.17f, 1.0f));
     ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.16f, 0.18f, 0.22f, 1.0f));
     ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.18f, 0.20f, 0.25f, 1.0f));
-    for (int i = 0; i < g_trackingCount; i++) {
-        int col = i % 2;
-        if (!hasState) ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.35f);
-        if (col == 1) ImGui::SameLine(colW + 4.0f);
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.72f, 0.78f, 0.84f, 1.0f));
-        ImGui::Text("  %s", g_trackingLabels[i]);
-        ImGui::PopStyleColor();
-        ImGui::SameLine(col == 0 ? colW - 84.0f : colW + colW - 84.0f);
-        bool trackVal = hasState ? states[i].track : false;
-        ImGui::PushStyleColor(ImGuiCol_CheckMark, ImVec4(0.18f, 0.85f, 0.65f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_Text, trackVal ? ImVec4(0.18f, 0.85f, 0.65f, 1.0f) : ImVec4(0.40f, 0.44f, 0.50f, 1.0f));
-        char trackId[32]; snprintf(trackId, sizeof(trackId), "T##t%d", i);
-        if (ImGui::Checkbox(trackId, &trackVal) && hasState) {
-            states[i].track = trackVal;
-            std::string cmd = CMDSTRING; cmd += trackVal ? "Track|" : "NoTrack|"; cmd += g_trackingLabels[i];
-            PipeServer::SendCommand(pid, cmd);
+
+    for (int ci = 0; ci < g_categoryCount; ci++) {
+        const TrackingCategory& cat = g_trackingCategories[ci];
+
+        RenderCategoryHeader(cat.label, !hasState);
+
+        int itemsInCat = cat.endIdx - cat.startIdx + 1;
+        for (int li = 0; li < itemsInCat; li++) {
+            int i = cat.startIdx + li;
+            int col = li % 2;
+
+            if (!hasState) ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.35f);
+            if (col == 1) ImGui::SameLine(colW + 4.0f);
+
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.72f, 0.78f, 0.84f, 1.0f));
+            ImGui::Text("  %s", g_trackingLabels[i]);
+            ImGui::PopStyleColor();
+
+            ImGui::SameLine(col == 0 ? colW - 84.0f : colW + colW - 84.0f);
+
+            bool trackVal = hasState ? states[i].track : false;
+            ImGui::PushStyleColor(ImGuiCol_CheckMark, ImVec4(0.18f, 0.85f, 0.65f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_Text, trackVal
+                                  ? ImVec4(0.18f, 0.85f, 0.65f, 1.0f)
+                                  : ImVec4(0.40f, 0.44f, 0.50f, 1.0f));
+            char trackId[32]; snprintf(trackId, sizeof(trackId), "T##t%d", i);
+            if (ImGui::Checkbox(trackId, &trackVal) && hasState) {
+                states[i].track = trackVal;
+                std::string cmd = CMDSTRING;
+                cmd += trackVal ? "Track|" : "NoTrack|";
+                cmd += g_trackingLabels[i];
+                PipeServer::SendCommand(pid, cmd);
+            }
+            ImGui::PopStyleColor(2);
+
+            const bool supportsBlock = (strcmp(g_trackingLabels[i], "Memory Alloc") != 0 &&
+                                        strcmp(g_trackingLabels[i], "Memory Free") != 0);
+            if (supportsBlock) {
+                ImGui::SameLine(0, cbSpacing);
+                bool blockVal = hasState ? states[i].block : false;
+                ImGui::PushStyleColor(ImGuiCol_CheckMark, ImVec4(0.85f, 0.28f, 0.28f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.30f, 0.10f, 0.10f, 0.6f));
+                ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.40f, 0.12f, 0.12f, 0.8f));
+                ImGui::PushStyleColor(ImGuiCol_Text, blockVal
+                                      ? ImVec4(0.90f, 0.32f, 0.32f, 1.0f)
+                                      : ImVec4(0.40f, 0.44f, 0.50f, 1.0f));
+                char blockId[32]; snprintf(blockId, sizeof(blockId), "B##b%d", i);
+                if (ImGui::Checkbox(blockId, &blockVal) && hasState) {
+                    states[i].block = blockVal;
+                    std::string cmd = CMDSTRING;
+                    cmd += blockVal ? "Block|" : "NoBlock|";
+                    cmd += g_trackingLabels[i];
+                    PipeServer::SendCommand(pid, cmd);
+                }
+                ImGui::PopStyleColor(4);
+            }
+
+            if (!hasState) ImGui::PopStyleVar();
+
+            if (col == 1 || li == itemsInCat - 1)
+                ImGui::Dummy(ImVec2(0, 1));
         }
-        ImGui::PopStyleColor(2);
-        ImGui::SameLine(0, cbSpacing);
-        bool blockVal = hasState ? states[i].block : false;
-        ImGui::PushStyleColor(ImGuiCol_CheckMark, ImVec4(0.85f, 0.28f, 0.28f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.30f, 0.10f, 0.10f, 0.6f));
-        ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.40f, 0.12f, 0.12f, 0.8f));
-        ImGui::PushStyleColor(ImGuiCol_Text, blockVal ? ImVec4(0.90f, 0.32f, 0.32f, 1.0f) : ImVec4(0.40f, 0.44f, 0.50f, 1.0f));
-        char blockId[32]; snprintf(blockId, sizeof(blockId), "B##b%d", i);
-        if (ImGui::Checkbox(blockId, &blockVal) && hasState) {
-            states[i].block = blockVal;
-            std::string cmd = CMDSTRING; cmd += blockVal ? "Block|" : "NoBlock|"; cmd += g_trackingLabels[i];
-            PipeServer::SendCommand(pid, cmd);
-        }
-        ImGui::PopStyleColor(4);
-        if (!hasState) ImGui::PopStyleVar();
-        if (col == 1 || i == g_trackingCount - 1) ImGui::Dummy(ImVec2(0, 1));
     }
+
     ImGui::PopStyleColor(3);
     ImGui::EndChild();
     ImGui::PopStyleColor();
