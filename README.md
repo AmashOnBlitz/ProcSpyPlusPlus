@@ -105,7 +105,7 @@ Each event type gets its own color — file writes are orange, network is cyan, 
 
 ---
 
-### Step 4 — Custom DLL Inject (Bonus)
+### Step 4 — Custom DLL Inject 
 
 Click the icon in the left toolbar to open the custom injection dialog. Pick any process, browse to any `.dll`, inject it.
 
