@@ -108,6 +108,7 @@
       <AdditionalIncludeDirectories>$(ProjectDir)include;$(ProjectDir)Libraries\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -128,6 +129,7 @@
       <AdditionalIncludeDirectories>$(ProjectDir)include;$(ProjectDir)Libraries\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -203,6 +205,7 @@
     <ResourceCompile Include="Resources\ProcSpy++.rc" />
   </ItemGroup>
   <ItemGroup>
+    <Image Include="Resources\dllinjection.ico" />
     <Image Include="Resources\logo.ico" />
     <Image Include="Resources\olddllinjection.ico" />
   </ItemGroup>
