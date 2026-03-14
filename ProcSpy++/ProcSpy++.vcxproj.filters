@@ -110,5 +110,21 @@
     <ClInclude Include="include\PipeServer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Resources\resource.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="Resources\ProcSpy++.rc">
+      <Filter>Resource Files</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="Resources\icon1.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Resources\olddllinjection.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
   </ItemGroup>
 </Project>

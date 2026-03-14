@@ -1,6 +1,7 @@
 #pragma once
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
+#include <Unknwn.h>
 #include <Windows.h>
 #include <tchar.h>
 #include <iostream>
@@ -14,3 +15,5 @@
 #include <ImGUI/imgui.h>
 #include <ImGUI/imgui_impl_glfw.h>
 #include <ImGUI/imgui_impl_opengl3.h>
+//#include <objidl.h>
+#include <gdiplus.h>

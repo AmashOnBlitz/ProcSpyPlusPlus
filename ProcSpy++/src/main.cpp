@@ -9,6 +9,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int) {
 
     int last_fb_w = 0, last_fb_h = 0;
     ImGuiManager::Init(window);
+    Render_Init();
 
     while (!glfwWindowShouldClose(window)) {
         glfwWaitEventsTimeout(0.05);
@@ -27,7 +28,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int) {
         io.DisplayFramebufferScale = ImVec2((float)last_fb_w / win_w, (float)last_fb_h / win_h);
         io.FontGlobalScale = 1.0f;
 
-        ImGui::SetNextWindowPos(ImVec2(0, 0));  
+        ImGui::SetNextWindowPos(ImVec2(0, 0));
         ImGui::SetNextWindowSize(io.DisplaySize);
         ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar |
             ImGuiWindowFlags_NoMove |
@@ -45,6 +46,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int) {
     }
     CleanupAPIHooks();
     EjectAllSync();
+    Render_Shutdown();
     ImGuiManager::Shutdown();
     glfwDestroyWindow(window);
     glfwTerminate();
