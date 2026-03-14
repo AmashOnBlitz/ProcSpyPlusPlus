@@ -203,8 +203,8 @@
     <ResourceCompile Include="Resources\ProcSpy++.rc" />
   </ItemGroup>
   <ItemGroup>
+    <Image Include="Resources\logo.ico" />
     <Image Include="Resources\olddllinjection.ico" />
-    <Image Include="Resources\icon1.ico" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

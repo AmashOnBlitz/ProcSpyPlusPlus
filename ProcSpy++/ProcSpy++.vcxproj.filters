@@ -120,10 +120,10 @@
     </ResourceCompile>
   </ItemGroup>
   <ItemGroup>
-    <Image Include="Resources\icon1.ico">
+    <Image Include="Resources\olddllinjection.ico">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="Resources\olddllinjection.ico">
+    <Image Include="Resources\logo.ico">
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>

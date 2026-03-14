@@ -11,7 +11,9 @@
 #include <vector>
 #include <string>
 #include "glad/glad.h"
+#define GLFW_EXPOSE_NATIVE_WIN32
 #include "GLFW/glfw3.h"
+#include <GLFW/glfw3native.h>
 #include <ImGUI/imgui.h>
 #include <ImGUI/imgui_impl_glfw.h>
 #include <ImGUI/imgui_impl_opengl3.h>

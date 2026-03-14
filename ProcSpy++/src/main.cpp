@@ -2,10 +2,32 @@
 #include "WindowManager.h"
 #include "ImGuiManager.h"
 #include "Render.h"
-
+#include "../Resources/resource.h"
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int) {
     GLFWwindow* window = WindowManager::InitWindow(1440, 860, "ProcSpy++");
     if (!window) return 1;
+    HWND hwnd = glfwGetWin32Window(window);
+
+    HICON iconBig = (HICON)LoadImage(
+        hInstance,
+        MAKEINTRESOURCE(IDI_ICON1),
+        IMAGE_ICON,
+        32,
+        32,
+        LR_DEFAULTCOLOR
+    );
+
+    HICON iconSmall = (HICON)LoadImage(
+        hInstance,
+        MAKEINTRESOURCE(IDI_ICON1),
+        IMAGE_ICON,
+        16,
+        16,
+        LR_DEFAULTCOLOR
+    );
+
+    SendMessage(hwnd, WM_SETICON, ICON_BIG, (LPARAM)iconBig);
+    SendMessage(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)iconSmall);
 
     int last_fb_w = 0, last_fb_h = 0;
     ImGuiManager::Init(window);
